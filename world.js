@@ -676,7 +676,7 @@ function renderNotes() {
     const mine = testMode || n.team === me;
     d.className = `note t${n.team}${noteDone[i] ? ' flip' : ''}${!mine && !noteDone[i] ? ' locked' : ''}`;
     d.style.setProperty('--rot', ((i * 37) % 7 - 3) + 'deg');
-    d.innerHTML = `<div class="in"><div class="f"><div style="font-size:1.5rem">${n.word}</div><small style="color:#7a5a20">${mine ? 'tap to solve' : 'Team ' + n.team}</small></div><div class="b">${n.digit}</div></div>`;
+    d.innerHTML = `<div class="in"><div class="f"><div style="font-size:1.4rem">&#9993;&#65039; Note ${i + 1}</div><small style="color:#7a5a20">${mine ? 'tap to solve' : 'Team ' + n.team}</small></div><div class="b"><div>${n.digit}</div><small style="font-size:.85rem;color:#6b5aa8;font-weight:600">${n.word.toLowerCase()}</small></div></div>`;
     d.onclick = () => { if (noteDone[i]) return; if (!mine) { $('noteMsg').textContent = `That note is for Team ${n.team}.`; return; } openNotePuzzle(i); };
     grid.appendChild(d);
   });
@@ -686,7 +686,7 @@ function renderNotes() {
 }
 function openNotePuzzle(i) {
   noteOpen = i; const n = NOTES[i];
-  $('npWord').textContent = n.word; $('npQ').textContent = n.q; $('npMsg').textContent = '';
+  $('npWord').textContent = 'Note ' + (i + 1); $('npQ').textContent = n.q; $('npMsg').textContent = '';
   const box = $('npOpts'); box.innerHTML = '';
   shuffle(n.opts).forEach(o => { const b = document.createElement('button'); b.textContent = o; b.onclick = () => {
     if (o === n.a) { $('notePuzzle').style.display = 'none'; solveNote(i, true); }
