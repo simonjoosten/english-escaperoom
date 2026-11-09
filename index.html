@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inglisch Escaperoom</title>
+<style>
+  :root { --bg:#14111f; --card:#201b33; --text:#f3efff; --muted:#a79fc4; --t1:#ff6b6b; --t2:#4dabf7; --ok:#51cf66; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,sans-serif; }
+  .screen { display:none; width:min(92vw,460px); text-align:center; padding:16px; }
+  .screen.active { display:block; }
+  h1 { margin:0 0 8px; font-size:2rem; }
+  p { color:var(--muted); }
+  .bar { height:12px; background:var(--card); border-radius:99px; overflow:hidden; margin-top:24px; }
+  .bar > div { height:100%; width:0; background:linear-gradient(90deg,var(--t1),var(--t2)); transition:width .2s; }
+  .btns { display:flex; gap:16px; margin-top:28px; }
+  button { flex:1; padding:22px 12px; font-size:1.2rem; font-weight:700; color:#fff; border:0; border-radius:14px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .b1 { background:var(--t1); } .b2 { background:var(--t2); }
+  .status { margin-top:20px; min-height:1.4em; }
+  .card { background:var(--card); border-radius:14px; padding:18px; margin-top:20px; }
+  input { width:100%; padding:14px; font-size:1.1rem; border-radius:10px; border:2px solid #3a3358; background:var(--bg); color:var(--text); margin:10px 0; }
+  .ok { color:var(--ok); font-weight:700; }
+  .players { display:flex; gap:12px; margin-top:20px; }
+  .player { flex:1; background:var(--card); border-radius:14px; padding:16px; }
+  .player small { color:var(--muted); display:block; }
+  .player b { font-size:1.2rem; word-break:break-word; }
+</style>
+</head>
+<body>
+
+<section id="loading" class="screen active">
+  <h1>Inglisch Escaperoom</h1>
+  <p>Loading...</p>
+  <div class="bar"><div id="fill"></div></div>
+</section>
+
+<section id="menu" class="screen">
+  <h1>Choose your team</h1>
+  <p>Team 1 and Team 2 each press their own button to link up.</p>
+  <div class="btns">
+    <button class="b1" id="pick1">Team 1</button>
+    <button class="b2" id="pick2">Team 2</button>
+  </div>
+  <div class="status" id="menuStatus"></div>
+</section>
+
+<section id="lobby" class="screen">
+  <h1 id="lobbyTitle"></h1>
+  <div class="status" id="lobbyStatus"></div>
+  <div class="card" id="nameCard" style="display:none">
+    <label for="nameInput">Fill in your team name</label>
+    <input id="nameInput" maxlength="24" placeholder="Team name" autocomplete="off">
+    <button class="b1" id="saveName" style="width:100%;padding:14px;background:var(--ok)">Save</button>
+  </div>
+  <div class="players" id="players" style="display:none">
+    <div class="player"><small>Team 1</small><b id="n1">...</b></div>
+    <div class="player"><small>Team 2</small><b id="n2">...</b></div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const show = id => { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); $(id).classList.add('active'); };
+
+// Fixed ids so the two teams find each other without a server.
+const ID = { 1: 'inglisch-escaperoom-team-1', 2: 'inglisch-escaperoom-team-2' };
+
+// Loading screen
+let pct = 0;
+const timer = setInterval(() => {
+  pct = Math.min(100, pct + 4 + Math.random() * 8);
+  $('fill').style.width = pct + '%';
+  if (pct >= 100) { clearInterval(timer); setTimeout(() => show('menu'), 300); }
+}, 120);
+
+// Team selection + linking
+let me, other, peer, conn, retry;
+const names = { 1: '', 2: '' };
+
+$('pick1').onclick = () => start(1);
+$('pick2').onclick = () => start(2);
+
+function start(team) {
+  me = team; other = team === 1 ? 2 : 1;
+  $('pick1').disabled = $('pick2').disabled = true;
+  $('menuStatus').textContent = 'Connecting...';
+  if (typeof Peer === 'undefined') { $('menuStatus').textContent = 'Could not load the connection library. Check your internet.'; $('pick1').disabled = $('pick2').disabled = false; return; }
+
+  peer = new Peer(ID[me]);
+  peer.on('error', err => {
+    if (err.type === 'unavailable-id') {
+      $('menuStatus').textContent = `Team ${me} is already taken by someone else.`;
+      $('pick1').disabled = $('pick2').disabled = false;
+    } else if (err.type === 'peer-unavailable') {
+      // other team has not pressed yet: keep trying
+    } else {
+      $('menuStatus').textContent = 'Connection problem: ' + err.type;
+    }
+  });
+  peer.on('open', () => {
+    show('lobby');
+    $('lobbyTitle').textContent = `You are Team ${me}`;
+    $('lobbyStatus').textContent = `Waiting for Team ${other} to press their button...`;
+    peer.on('connection', c => setupConn(c));
+    if (me === 2) tryConnect();
+  });
+}
+
+function tryConnect() {
+  if (conn && conn.open) return;
+  setupConn(peer.connect(ID[1], { reliable: true }));
+  retry = setTimeout(tryConnect, 2500);
+}
+
+function setupConn(c) {
+  if (conn && conn.open) { c.close(); return; }
+  c.on('open', () => {
+    conn = c; clearTimeout(retry);
+    $('lobbyStatus').innerHTML = '<span class="ok">Linked!</span> Fill in your team name.';
+    $('nameCard').style.display = 'block';
+    $('players').style.display = 'flex';
+    if (names[me]) c.send({ team: me, name: names[me] });
+  });
+  c.on('data', d => { names[d.team] = d.name; render(); });
+  c.on('close', () => {
+    conn = null;
+    $('lobbyStatus').textContent = `Team ${other} left. Waiting for them to come back...`;
+    if (me === 2) tryConnect();
+  });
+}
+
+$('saveName').onclick = () => {
+  const name = $('nameInput').value.trim();
+  if (!name) return;
+  names[me] = name;
+  if (conn && conn.open) conn.send({ team: me, name });
+  render();
+};
+
+function render() {
+  $('n1').textContent = names[1] || '...';
+  $('n2').textContent = names[2] || '...';
+}
+</script>
+</body>
+</html>
