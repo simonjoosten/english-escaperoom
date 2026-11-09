@@ -65,8 +65,9 @@
 const $ = id => document.getElementById(id);
 const show = id => { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); $(id).classList.add('active'); };
 
-// Fixed ids so the two teams find each other without a server.
-const ID = { 1: 'english-escaperoom-team-1', 2: 'english-escaperoom-team-2' };
+// Team 1's id changes every 5 minutes, so a stuck/stale claim resets by itself.
+const slot = () => Math.floor(Date.now() / 300000);
+const team1Id = s => 'english-escaperoom-team1-' + s;
 
 // Loading screen
 let pct = 0;
@@ -88,16 +89,29 @@ function start(team) {
   $('pick1').disabled = $('pick2').disabled = true;
   $('menuStatus').textContent = 'Connecting...';
   if (typeof Peer === 'undefined') { $('menuStatus').textContent = 'Could not load the connection library. Check your internet.'; $('pick1').disabled = $('pick2').disabled = false; return; }
+  openPeer();
+  // Reset every 5 minutes: Team 1 gets a fresh id when the time window changes (unless already linked).
+  if (me === 1) setInterval(() => { if (!(conn && conn.open) && slot() !== currentSlot) openPeer(); }, 5000);
+  window.addEventListener('beforeunload', () => peer && peer.destroy());
+}
 
-  peer = new Peer(ID[me]);
+let currentSlot;
+function openPeer() {
+  clearTimeout(retry);
+  if (peer) peer.destroy();
+  currentSlot = slot();
+  // Team 1 uses the id of the current 5 minute window; Team 2 uses a random id.
+  peer = me === 1 ? new Peer(team1Id(currentSlot)) : new Peer();
   peer.on('error', err => {
     if (err.type === 'unavailable-id') {
-      $('menuStatus').textContent = `Team ${me} is already taken by someone else.`;
-      $('pick1').disabled = $('pick2').disabled = false;
+      // Stale id on the server: wait a moment and try again (the id frees up by itself).
+      $('menuStatus').textContent = 'Team 1 is still busy, trying again...';
+      retry = setTimeout(openPeer, 3000);
     } else if (err.type === 'peer-unavailable') {
       // other team has not pressed yet: keep trying
     } else {
       $('menuStatus').textContent = 'Connection problem: ' + err.type;
+      retry = setTimeout(openPeer, 3000);
     }
   });
   peer.on('open', () => {
@@ -111,7 +125,7 @@ function start(team) {
 
 function tryConnect() {
   if (conn && conn.open) return;
-  setupConn(peer.connect(ID[1], { reliable: true }));
+  setupConn(peer.connect(team1Id(slot()), { reliable: true }));
   retry = setTimeout(tryConnect, 2500);
 }
 
