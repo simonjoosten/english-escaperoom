@@ -185,6 +185,7 @@ function setupConn(c) {
     $('nameCard').style.display = 'block';
     $('players').style.display = 'flex';
     if (names[me]) c.send({ team: me, name: names[me] });
+    if (scores[me] !== null) c.send({ team: me, score: scores[me] });
   });
   c.on('data', d => {
     if (d.name !== undefined) names[d.team] = d.name;
