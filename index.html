@@ -58,6 +58,7 @@
     <div class="player"><small>Team 1</small><b id="n1">...</b></div>
     <div class="player"><small>Team 2</small><b id="n2">...</b></div>
   </div>
+  <button id="leave" style="margin-top:24px;padding:12px 20px;font-size:1rem;background:#3a3358">Leave team</button>
 </section>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -67,7 +68,9 @@ const show = id => { document.querySelectorAll('.screen').forEach(s => s.classLi
 
 // Team 1's id changes every 5 minutes, so a stuck/stale claim resets by itself.
 const slot = () => Math.floor(Date.now() / 300000);
-const team1Id = s => 'english-escaperoom-team1-' + s;
+const team1Id = (s, i) => 'english-escaperoom-team1-' + s + '-' + i;
+const TRIES = 5; // if one id is stuck, Team 1 takes the next one and Team 2 tries all of them
+let tries = 0;
 
 // Loading screen
 let pct = 0;
@@ -91,22 +94,41 @@ function start(team) {
   if (typeof Peer === 'undefined') { $('menuStatus').textContent = 'Could not load the connection library. Check your internet.'; $('pick1').disabled = $('pick2').disabled = false; return; }
   openPeer();
   // Reset every 5 minutes: Team 1 gets a fresh id when the time window changes (unless already linked).
-  if (me === 1) setInterval(() => { if (!(conn && conn.open) && slot() !== currentSlot) openPeer(); }, 5000);
-  window.addEventListener('beforeunload', () => peer && peer.destroy());
+  if (me === 1) slotTimer = setInterval(() => { if (!(conn && conn.open) && slot() !== currentSlot) openPeer(); }, 5000);
 }
+let slotTimer;
+window.addEventListener('beforeunload', () => peer && peer.destroy());
+
+function leave() {
+  clearTimeout(retry); clearInterval(slotTimer);
+  if (conn) conn.close();
+  if (peer) peer.destroy();
+  peer = conn = null; me = other = null;
+  names[1] = names[2] = '';
+  $('nameInput').value = '';
+  $('nameCard').style.display = 'none';
+  $('players').style.display = 'none';
+  render();
+  $('menuStatus').textContent = '';
+  $('pick1').disabled = $('pick2').disabled = false;
+  show('menu');
+}
+$('leave').onclick = leave;
 
 let currentSlot;
 function openPeer() {
   clearTimeout(retry);
   if (peer) peer.destroy();
+  if (slot() !== currentSlot) tries = 0;
   currentSlot = slot();
-  // Team 1 uses the id of the current 5 minute window; Team 2 uses a random id.
-  peer = me === 1 ? new Peer(team1Id(currentSlot)) : new Peer();
+  // Team 1 uses an id of the current 5 minute window; Team 2 uses a random id.
+  peer = me === 1 ? new Peer(team1Id(currentSlot, tries)) : new Peer();
   peer.on('error', err => {
     if (err.type === 'unavailable-id') {
-      // Stale id on the server: wait a moment and try again (the id frees up by itself).
+      // Stale id on the server: take the next one.
+      tries = (tries + 1) % TRIES;
       $('menuStatus').textContent = 'Team 1 is still busy, trying again...';
-      retry = setTimeout(openPeer, 3000);
+      retry = setTimeout(openPeer, 800);
     } else if (err.type === 'peer-unavailable') {
       // other team has not pressed yet: keep trying
     } else {
@@ -125,7 +147,7 @@ function openPeer() {
 
 function tryConnect() {
   if (conn && conn.open) return;
-  setupConn(peer.connect(team1Id(slot()), { reliable: true }));
+  for (let i = 0; i < TRIES; i++) setupConn(peer.connect(team1Id(slot(), i), { reliable: true }));
   retry = setTimeout(tryConnect, 2500);
 }
 
