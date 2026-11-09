@@ -170,6 +170,7 @@
   .confetti { position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
   .confetti i { position:absolute; top:-20px; width:10px; height:16px; border-radius:2px; animation:fall linear infinite; }
   @keyframes fall { to { transform:translateY(110vh) rotate(720deg); } }
+  #skipLevel { position:fixed; right:14px; bottom:14px; z-index:30; flex:none; padding:10px 16px; font-size:.95rem; background:linear-gradient(180deg,#ffb347,#e07b00); }
 </style>
 </head>
 <body>
@@ -344,6 +345,8 @@
   <p>You found B-O-A-T, sailed away from the shark and cracked the secret code together. Amazing teamwork!</p>
   <button class="b1" id="playAgain" style="width:100%;padding:16px;background:var(--ok)">Play again</button>
 </section>
+
+<button id="skipLevel" style="display:none">Skip level (test)</button>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>

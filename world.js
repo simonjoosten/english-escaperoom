@@ -735,6 +735,29 @@ window.onNetOpen = c => {
   noteDone.forEach((v, i) => { if (v) c.send({ noteDone: i }); });
 };
 
+// ---------------------------------------------------------------- test mode: skip to the next level
+window.skipLevel = function () {
+  if (!testMode) return;
+  const act = document.querySelector('.screen.active').id;
+  if (['hub', 'safe', 'cross', 'wsearch'].includes(act)) {            // level 1: the safes
+    safeUnlocked = true; safeDone[1] = safeDone[2] = true; enterSafe(); return;
+  }
+  if (act === 'keyScene' || act === 'doorScene') { outsideOpen = true; window.enterOutside(); return; }
+  if (act === 'outside') {
+    if (dlg) closeDialog();
+    if (!allLetters()) { Object.keys(NPCS).forEach(k => { done[k] = true; }); renderLetters(); toast('Test: you now have B-O-A-T!'); return; }   // level 2: the people
+    if (cur.id !== 'island') { setScene('island', 7, 6); toast('Test: skipped the boat race.'); return; }                               // level 3: the boat
+    NOTES.forEach((_, i) => { noteDone[i] = true; }); openNotes(); return;                                                           // level 4: the notes
+  }
+  if (act === 'boat') { if (boat && boat.status !== 'win') { boat.dist = GOAL; boat.speed = 1; } return; }
+  if (act === 'notes') { NOTES.forEach((_, i) => { noteDone[i] = true; }); renderNotes(); if ($('codeBox').style.display === 'block') showWin(); return; }
+};
+$('skipLevel').onclick = () => window.skipLevel();
+setInterval(() => {
+  const act = document.querySelector('.screen.active');
+  $('skipLevel').style.display = testMode && act && ['hub', 'safe', 'cross', 'wsearch', 'keyScene', 'doorScene', 'outside', 'boat', 'notes'].includes(act.id) ? 'block' : 'none';
+}, 300);
+
 window.resetWorld = function () {
   done = {}; noteDone = []; started = false; cur = null; boat = null; dlg = null;
   boatReady = { me: false, other: false };
