@@ -154,6 +154,7 @@
   </div>
   <div class="status" id="hubMsg"></div>
   <button class="b1" id="goOutside" style="display:none;margin-top:12px;width:100%;padding:16px;background:var(--ok)">Go outside</button>
+  <button id="testMoney" style="display:none;margin-top:12px;padding:12px 20px;font-size:1rem;background:#f08c00">+100 coins (test)</button>
   <button id="testSwitch" style="display:none;margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358"></button>
   <button id="hubLobby" style="margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358">Back to lobby</button>
 </section>
@@ -531,6 +532,7 @@ function toHub(msg) {
   $('money').textContent = money;
   $('hubMsg').textContent = msg || '';
   $('testSwitch').style.display = testMode ? 'inline-block' : 'none';
+  $('testMoney').style.display = testMode ? 'inline-block' : 'none';
   $('testSwitch').textContent = `Switch to Team ${me === 1 ? 2 : 1}`;
   $('hubLobby').textContent = testMode ? 'Exit test mode' : 'Back to lobby';
   show('hub');
@@ -545,6 +547,7 @@ $('testBtn').onclick = () => {
   money = 0; bestQuiz = 0; quizDone = true; scores[1] = scores[2] = null;
   toHub('Test mode: you play alone, no second player needed.');
 };
+$('testMoney').onclick = () => { setMoney(money + 100); $('hubMsg').textContent = 'Test mode: you gave yourself 100 coins.'; };
 $('testSwitch').onclick = () => {
   me = me === 1 ? 2 : 1; other = me === 1 ? 2 : 1;
   bestQuiz = 0;
