@@ -555,7 +555,7 @@ function boatStep(dt) {
   b.x = clamp(b.x + vx * 230 * dt, 44, BW - 44); b.tilt += (vx * .25 - b.tilt) * .15;
   b.speed = Math.max(0, b.speed - .08 * dt);
   b.dist += b.speed * 95 * dt;
-  b.gap = Math.min(300, b.gap + (b.speed - .5) * 55 * dt);
+  b.gap = Math.min(300, b.gap + (b.speed - .42) * 55 * dt);
   b.hit = Math.max(0, b.hit - dt); b.flash = Math.max(0, b.flash - dt);
   for (const r of b.rocks) {
     if (r.hit) continue;
@@ -643,7 +643,7 @@ function answerBoat(btn, o) {
   if (qLock) return; qLock = true;
   const good = o === boatQ.a;
   btn.classList.add(good ? 'right' : 'wrong');
-  const v = good ? .42 : -.1;
+  const v = good ? .5 : -.1;
   if (isSteerer()) { if (boat && boat.status === 'run') boat.speed = clamp(boat.speed + v, 0, 1); } else send({ boost: v });
   setTimeout(nextBoatQ, good ? 250 : 700);
 }
