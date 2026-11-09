@@ -105,6 +105,8 @@
   /* word search */
   .wgrid { display:grid; grid-template-columns:repeat(10,1fr); gap:3px; margin:16px auto; max-width:400px; }
   .wgrid button { padding:0; height:34px; font-size:1rem; border-radius:8px; flex:none; box-shadow:0 3px 0 rgba(0,0,0,.25); background:linear-gradient(180deg,#4a3f94,#352c72); }
+  .wgrid button:hover:not(:disabled), .wgrid button:active:not(:disabled) { transform:none; filter:brightness(1.15); }
+  .wgrid button { touch-action:none; user-select:none; -webkit-user-select:none; }
   .wgrid button.sel { background:linear-gradient(180deg,#5cc6ff,#1c8ad6); }
   .wgrid button.found { background:linear-gradient(180deg,#5ee89a,#1fae5f); color:#0b2a17; }
   .words { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
@@ -851,11 +853,40 @@ function renderWs() {
     const key = r + ',' + c;
     if (st.foundCells.has(key)) b.classList.add('found');
     if (st.first && st.first[0] === r && st.first[1] === c) b.classList.add('sel');
-    b.onclick = () => wsClick(r, c);
+    b.dataset.r = r; b.dataset.c = c;
     el.appendChild(b);
   }));
   $('wsWords').innerHTML = WS_WORDS.map(w => `<span class="${st.found.has(w) ? 'found' : ''}">${w}</span>`).join('');
 }
+
+let wsLast = '';
+function wsLine(r1, c1, r2, c2) {
+  const dr = r2 - r1, dc = c2 - c1, steps = Math.max(Math.abs(dr), Math.abs(dc));
+  if (steps === 0 || !(dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc))) return null;
+  const sr = Math.sign(dr), sc = Math.sign(dc), cells = [];
+  for (let i = 0; i <= steps; i++) cells.push([r1 + sr * i, c1 + sc * i]);
+  return cells;
+}
+
+// tap first + last letter, OR press on the first letter and drag to the last
+$('wsGrid').addEventListener('pointerdown', e => {
+  const b = e.target.closest('button'); if (!b || !wsState) return; e.preventDefault();
+  const r = +b.dataset.r, c = +b.dataset.c, st = wsState;
+  if (st.first) { st.down = null; wsClick(r, c); } else { st.first = [r, c]; st.down = [r, c]; renderWs(); }
+});
+$('wsGrid').addEventListener('pointermove', e => {
+  const st = wsState; if (!st || !st.first) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest && el.closest('#wsGrid button');
+  const cells = b ? wsLine(st.first[0], st.first[1], +b.dataset.r, +b.dataset.c) : null;
+  const keep = new Set((cells || [st.first]).map(([r, c]) => r + ',' + c));
+  document.querySelectorAll('#wsGrid button').forEach(x => x.classList.toggle('sel', keep.has(x.dataset.r + ',' + x.dataset.c)));
+});
+document.addEventListener('pointerup', e => {
+  const st = wsState; if (!st || !st.down) return;
+  const [dr, dc] = st.down; st.down = null;
+  const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest && el.closest('#wsGrid button');
+  if (b && (+b.dataset.r !== dr || +b.dataset.c !== dc)) wsClick(+b.dataset.r, +b.dataset.c);
+});
 
 function wsClick(r, c) {
   const st = wsState;
@@ -868,6 +899,7 @@ function wsClick(r, c) {
     let str = '';
     for (let i = 0; i <= steps; i++) { cells.push((r1 + sr * i) + ',' + (c1 + sc * i)); str += st.grid[r1 + sr * i][c1 + sc * i]; }
     const rev = [...str].reverse().join('');
+    wsLast = str;
     const hit = WS_WORDS.find(w => (w === str || w === rev) && !st.found.has(w));
     if (hit) {
       st.found.add(hit); cells.forEach(k => st.foundCells.add(k));
@@ -880,7 +912,7 @@ function wsClick(r, c) {
       return;
     }
   }
-  $('wsMsg').textContent = 'That is not a word from the list.';
+  $('wsMsg').textContent = (steps > 0 && (dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc))) ? `You selected "${wsLast}". That is not a word from the list.` : 'Pick the first and the last letter of a word in a straight line.';
   renderWs();
 }
 $('wsBack').onclick = () => enterSafe();
