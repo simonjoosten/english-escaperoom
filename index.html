@@ -34,6 +34,15 @@
   .blank { display:inline-block; min-width:70px; border-bottom:3px solid var(--t2); color:var(--ok); }
   .hint { color:var(--muted); min-height:1.4em; }
   .score { font-size:3rem; font-weight:800; margin:16px 0; }
+  .hub { display:grid; grid-template-columns:1fr 1.2fr 1fr; grid-template-areas:". safe ." "left money right" ". bottom ."; gap:12px; align-items:stretch; }
+  .tile { padding:18px 8px; font-size:1rem; background:#3a3358; display:flex; flex-direction:column; justify-content:center; gap:4px; }
+  .tile small { font-weight:400; color:var(--muted); font-size:.8rem; }
+  .tile.safe { grid-area:safe; background:#6741d9; }
+  .tile.l { grid-area:left; } .tile.r { grid-area:right; } .tile.bt { grid-area:bottom; }
+  .moneybox { grid-area:money; background:var(--card); border-radius:14px; display:flex; flex-direction:column; justify-content:center; padding:16px 6px; }
+  .moneybox b { font-size:2.4rem; color:#ffd43b; }
+  .moneybox small { color:var(--muted); }
+  .clock { width:200px; height:200px; }
 </style>
 </head>
 <body>
@@ -67,7 +76,7 @@
     <div class="player"><small>Team 2</small><b id="n2">...</b><small id="s2"></small></div>
   </div>
   <button class="b1" id="startQuiz" style="display:none;margin-top:20px;width:100%;padding:18px;background:var(--ok)">Start questions</button>
-  <button class="b1" id="lobbyPuzzle" style="display:none;margin-top:12px;width:100%;padding:16px;background:var(--t2)">My digits / final puzzle</button>
+  <button class="b1" id="lobbyHub" style="display:none;margin-top:12px;width:100%;padding:16px;background:var(--t2)">Go to menu</button>
   <button id="leave" style="margin-top:24px;padding:12px 20px;font-size:1rem;background:#3a3358">Leave team</button>
 </section>
 
@@ -79,34 +88,23 @@
   <p>Points: <b id="qPoints">0</b></p>
 </section>
 
-<section id="done" class="screen">
-  <h1>Well done!</h1>
-  <div class="score" id="finalScore"></div>
-  <p>Your secret digits (every 2 points opens 1 digit):</p>
-  <div class="score" id="digits"></div>
-  <p>Tell your digits to your partner. You need both parts for the final code!</p>
-  <button class="b1" id="toPuzzle" style="width:100%;padding:16px;background:var(--ok)">Final puzzle</button>
-  <button class="b1" id="retry" style="width:100%;margin-top:12px;padding:14px;background:#3a3358">Try the questions again</button>
-  <button class="b1" id="backLobby" style="width:100%;margin-top:12px;padding:14px;background:#3a3358">Back</button>
-</section>
-
-<section id="puzzle" class="screen">
-  <h1>Final puzzle</h1>
-  <p>Team 1's 5 digits come first, then Team 2's 5 digits. Work together and fill in the full code.</p>
-  <div class="card">
-    <div id="myDigits" class="score" style="font-size:1.6rem"></div>
-    <input id="codeInput" inputmode="numeric" maxlength="10" placeholder="10 digits" autocomplete="off" style="text-align:center;letter-spacing:4px;font-size:1.5rem">
-    <button class="b1" id="tryCode" style="width:100%;padding:14px;background:var(--ok)">Open the lock</button>
-    <div class="status" id="codeMsg"></div>
+<section id="hub" class="screen" style="width:min(96vw,520px)">
+  <div class="hub">
+    <button class="tile safe" id="safeBtn">&#128274; Safe<small>costs 100 coins</small></button>
+    <button class="tile l" id="exClock">&#128368; Clock<small>say the time</small></button>
+    <div class="moneybox"><small>Your money</small><b id="money">0</b><small>coins</small></div>
+    <button class="tile r" id="exDate">&#128197; Date<small>say the date</small></button>
+    <button class="tile bt" id="exGrammar">&#9997; <span id="grammarName"></span><small>questions</small></button>
   </div>
-  <button class="b1" id="puzzleBack" style="margin-top:16px;padding:12px 20px;background:#3a3358">Back</button>
+  <div class="status" id="hubMsg"></div>
+  <button id="hubLobby" style="margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358">Back to lobby</button>
 </section>
 
-<section id="win" class="screen">
-  <h1>You escaped!</h1>
-  <div class="score">&#127881;</div>
-  <p id="winNames"></p>
-  <p>Team 1 and Team 2 solved it together. You win!</p>
+<section id="safe" class="screen">
+  <h1>The safe is open!</h1>
+  <div class="score">&#128275;</div>
+  <p>You paid 100 coins. What is inside comes later.</p>
+  <button class="b1" id="safeBack" style="width:100%;padding:16px;background:var(--ok)">Back to menu</button>
 </section>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -154,7 +152,8 @@ function leave() {
   if (peer) peer.destroy();
   peer = conn = null; me = other = null;
   names[1] = names[2] = ''; scores[1] = scores[2] = null;
-  $('startQuiz').style.display = 'none'; won = false;
+  $('startQuiz').style.display = 'none'; $('lobbyHub').style.display = 'none';
+  money = 0; bestQuiz = 0; quizDone = false; $('money').textContent = 0;
   $('nameInput').value = '';
   $('nameCard').style.display = 'none';
   $('players').style.display = 'none';
@@ -210,12 +209,10 @@ function setupConn(c) {
     $('players').style.display = 'flex';
     if (names[me]) c.send({ team: me, name: names[me] });
     if (scores[me] !== null) c.send({ team: me, score: scores[me] });
-    if (won) c.send({ win: true });
   });
   c.on('data', d => {
     if (d.name !== undefined) names[d.team] = d.name;
     if (d.score !== undefined) scores[d.team] = d.score;
-    if (d.win) showWin();
     render();
   });
   c.on('close', () => {
@@ -237,9 +234,9 @@ $('saveName').onclick = () => {
 function render() {
   $('n1').textContent = names[1] || '...';
   $('n2').textContent = names[2] || '...';
-  $('lobbyPuzzle').style.display = scores[me] !== null ? 'block' : 'none';
-  $('s1').textContent = scores[1] === null ? '' : scores[1] + ' / 10 points';
-  $('s2').textContent = scores[2] === null ? '' : scores[2] + ' / 10 points';
+  $('lobbyHub').style.display = quizDone ? 'block' : 'none';
+  $('s1').textContent = scores[1] === null ? '' : scores[1] + ' coins';
+  $('s2').textContent = scores[2] === null ? '' : scores[2] + ' coins';
 }
 
 // ---- Questions ----
@@ -270,46 +267,43 @@ const QUESTIONS = {
   ]},
 };
 
-let qi = 0, points = 0, locked = false, won = false;
+let money = 0, bestQuiz = 0, quizDone = false, round = null, locked = false;
 
-// Final code = Team 1's 5 digits + Team 2's 5 digits. Each team only sees the digits it earned.
-const DIGITS = { 1: '38164', 2: '92750' };
-const CODE = DIGITS[1] + DIGITS[2];
-function digitsText() {
-  const open = Math.floor((scores[me] || 0) / 2);
-  return DIGITS[me].split('').map((d, i) => i < open ? d : '?').join(' ');
+function setMoney(n) {
+  money = n; scores[me] = n;
+  $('money').textContent = n;
+  try { localStorage.setItem('escaperoom-money-team' + me, n); } catch (e) {}
+  if (conn && conn.open) conn.send({ team: me, score: n });
+  render();
 }
 
-$('startQuiz').onclick = () => { qi = 0; points = 0; show('quiz'); showQuestion(); };
-$('backLobby').onclick = () => show('lobby');
-$('lobbyPuzzle').onclick = () => { $('digits').textContent = digitsText(); $('finalScore').textContent = scores[me] + ' / 10'; show('done'); };
-$('retry').onclick = () => $('startQuiz').click();
-$('toPuzzle').onclick = () => { $('myDigits').textContent = 'Your digits: ' + digitsText(); $('codeMsg').textContent = ''; show('puzzle'); };
-$('puzzleBack').onclick = () => show('done');
-$('tryCode').onclick = () => {
-  if ($('codeInput').value.trim() === CODE) {
-    won = true;
-    if (conn && conn.open) conn.send({ win: true });
-    showWin();
-  } else {
-    $('codeMsg').textContent = 'Wrong code. Ask your partner for their digits and try again.';
-  }
-};
-function showWin() {
-  won = true;
-  $('winNames').textContent = (names[1] || 'Team 1') + ' + ' + (names[2] || 'Team 2');
-  show('win');
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+// Build 4 unique options: the right answer plus wrong ones made by makeWrong()
+function withOptions(answer, makeWrong) {
+  const set = new Set([answer]);
+  let guard = 0;
+  while (set.size < 4 && guard++ < 200) set.add(makeWrong());
+  return shuffle([...set]);
 }
 
-function showQuestion() {
+// ---- Round runner (used by every exercise) ----
+function runRound(items, onDone) {
+  round = { items, i: 0, pts: 0, onDone };
+  show('quiz');
+  showQ();
+}
+
+function showQ() {
   locked = false;
-  const set = QUESTIONS[me], [sentence, hint] = set.items[qi];
-  $('qProgress').textContent = `Question ${qi + 1} / ${set.items.length}`;
-  $('qSentence').innerHTML = sentence.replace('___', '<span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;</span>');
-  $('qHint').textContent = hint;
-  $('qPoints').textContent = points;
+  const it = round.items[round.i];
+  $('qProgress').textContent = `Question ${round.i + 1} / ${round.items.length}`;
+  $('qSentence').innerHTML = it.html;
+  $('qHint').textContent = it.hint || '';
+  $('qPoints').textContent = round.pts;
   $('qOpts').innerHTML = '';
-  set.options.forEach(o => {
+  it.options.forEach(o => {
     const b = document.createElement('button');
     b.textContent = o;
     b.onclick = () => answer(b, o);
@@ -320,29 +314,109 @@ function showQuestion() {
 function answer(btn, choice) {
   if (locked) return;
   locked = true;
-  const set = QUESTIONS[me], right = set.items[qi][2];
-  if (choice === right) { points++; btn.classList.add('right'); }
+  const right = round.items[round.i].answer;
+  if (choice === right) { round.pts++; btn.classList.add('right'); }
   else {
     btn.classList.add('wrong');
     [...$('qOpts').children].forEach(b => { if (b.textContent === right) b.classList.add('right'); });
   }
-  $('qPoints').textContent = points;
+  $('qPoints').textContent = round.pts;
   setTimeout(() => {
-    qi++;
-    if (qi < set.items.length) return showQuestion();
-    finishQuiz();
+    round.i++;
+    if (round.i < round.items.length) return showQ();
+    round.onDone(round.pts);
   }, 1200);
 }
 
-function finishQuiz() {
-  scores[me] = Math.max(scores[me] || 0, points);
-  $('digits').textContent = digitsText();
-  try { localStorage.setItem('escaperoom-points-team' + me, points); } catch (e) {}
-  if (conn && conn.open) conn.send({ team: me, score: scores[me] });
-  $('finalScore').textContent = scores[me] + ' / 10 (this try: ' + points + ')';
-  render();
-  show('done');
+// ---- Grammar questions (first quiz) ----
+function grammarItems() {
+  const set = QUESTIONS[me];
+  return set.items.map(([sentence, hint, ans]) => ({
+    html: sentence.replace('___', '<span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;</span>'),
+    hint, options: set.options, answer: ans,
+  }));
 }
+
+function grammarDone(pts) {
+  const gain = Math.max(0, pts - bestQuiz) * 10;
+  bestQuiz = Math.max(bestQuiz, pts);
+  quizDone = true;
+  setMoney(money + gain);
+  toHub(`You got ${pts} / 10 right. +${gain} coins` + (gain === 0 ? ' (you only earn coins for a better score than before)' : ''));
+}
+
+$('startQuiz').onclick = () => runRound(grammarItems(), grammarDone);
+$('exGrammar').onclick = () => runRound(grammarItems(), grammarDone);
+
+// ---- Time & date exercises ----
+const HOURS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const MINS = { 5: 'five', 10: 'ten', 20: 'twenty', 25: 'twenty-five' };
+function timePhrase(h, m) {
+  const next = h % 12 + 1;
+  if (m === 0) return `${HOURS[h]} o'clock`;
+  if (m === 15) return `quarter past ${HOURS[h]}`;
+  if (m === 30) return `half past ${HOURS[h]}`;
+  if (m === 45) return `quarter to ${HOURS[next]}`;
+  if (m < 30) return `${MINS[m]} past ${HOURS[h]}`;
+  return `${MINS[60 - m]} to ${HOURS[next]}`;
+}
+const randTime = () => ({ h: rnd(1, 12), m: rnd(0, 11) * 5 });
+
+function clockSvg(h, m) {
+  const ang = (deg, len) => { const r = (deg - 90) * Math.PI / 180; return [100 + len * Math.cos(r), 100 + len * Math.sin(r)]; };
+  const [hx, hy] = ang((h % 12 + m / 60) * 30, 50), [mx, my] = ang(m * 6, 75);
+  let nums = '';
+  for (let i = 1; i <= 12; i++) { const [x, y] = ang(i * 30, 82); nums += `<text x="${x}" y="${y + 5}" text-anchor="middle" font-size="14" fill="#f3efff">${i}</text>`; }
+  return `<svg class="clock" viewBox="0 0 200 200"><circle cx="100" cy="100" r="96" fill="#201b33" stroke="#a79fc4" stroke-width="4"/>${nums}` +
+    `<line x1="100" y1="100" x2="${hx}" y2="${hy}" stroke="#ff6b6b" stroke-width="6" stroke-linecap="round"/>` +
+    `<line x1="100" y1="100" x2="${mx}" y2="${my}" stroke="#4dabf7" stroke-width="4" stroke-linecap="round"/>` +
+    `<circle cx="100" cy="100" r="5" fill="#f3efff"/></svg>`;
+}
+
+function clockItems() {
+  return Array.from({ length: 10 }, (_, i) => {
+    const { h, m } = randTime(), ans = timePhrase(h, m);
+    const html = i % 2 === 0 ? clockSvg(h, m)
+      : `<div class="score" style="margin:0">${h}:${String(m).padStart(2, '0')}</div>`;
+    return { html, hint: 'What time is it?', answer: ans,
+      options: withOptions(ans, () => { const t = randTime(); return timePhrase(t.h, t.m); }) };
+  });
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ORD = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fifteenth', 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth', 'twentieth', 'twenty-first', 'twenty-second', 'twenty-third', 'twenty-fourth', 'twenty-fifth', 'twenty-sixth', 'twenty-seventh', 'twenty-eighth'];
+const datePhrase = (d, mo) => `the ${ORD[d]} of ${MONTHS[mo - 1]}`;
+
+function dateItems() {
+  return Array.from({ length: 10 }, () => {
+    const d = rnd(1, 28), mo = rnd(1, 12), ans = datePhrase(d, mo);
+    return { html: `<div class="score" style="margin:0">${String(d).padStart(2, '0')}/${String(mo).padStart(2, '0')}</div>`,
+      hint: 'Say the date (day / month)', answer: ans,
+      options: withOptions(ans, () => Math.random() < 0.4 && d <= 12 ? datePhrase(mo, d) : datePhrase(rnd(1, 28), rnd(1, 12))) };
+  });
+}
+
+function timeDone(pts) {
+  setMoney(money + pts * 10);
+  toHub(`You got ${pts} / 10 right. +${pts * 10} coins`);
+}
+$('exClock').onclick = () => runRound(clockItems(), timeDone);
+$('exDate').onclick = () => runRound(dateItems(), timeDone);
+
+// ---- Menu (hub) and safe ----
+function toHub(msg) {
+  $('grammarName').textContent = me === 1 ? 'this / that' : 'a / an';
+  $('money').textContent = money;
+  $('hubMsg').textContent = msg || '';
+  show('hub');
+}
+$('lobbyHub').onclick = () => toHub();
+$('hubLobby').onclick = () => show('lobby');
+$('safeBack').onclick = () => toHub();
+$('safeBtn').onclick = () => {
+  if (money >= 100) { setMoney(money - 100); show('safe'); }
+  else $('hubMsg').textContent = `You need 100 coins to open the safe. You have ${money}.`;
+};
 </script>
 </body>
 </html>
