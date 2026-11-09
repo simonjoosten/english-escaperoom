@@ -43,6 +43,60 @@
   .moneybox b { font-size:2.4rem; color:#ffd43b; }
   .moneybox small { color:var(--muted); }
   .clock { width:200px; height:200px; }
+  /* safe room */
+  .cabinet { display:grid; grid-template-columns:1fr 1fr; gap:6px; background:#5c4a32; border:6px solid #3d2f1e; border-radius:12px; padding:8px; margin-top:16px; }
+  .cabinet button { background:linear-gradient(145deg,#8a8f98,#5a5f68); padding:26px 8px; display:flex; flex-direction:column; gap:6px; align-items:center; border:3px solid #3c4048; }
+  .cabinet button small { font-weight:400; font-size:.8rem; }
+  .cabinet button .wheel { font-size:2.4rem; }
+  .cabinet button:disabled { opacity:.55; }
+  .cabinet button.done { background:linear-gradient(145deg,#51cf66,#2b8a3e); }
+  /* crossword */
+  .cgrid { display:grid; gap:2px; justify-content:center; margin:16px auto; }
+  .cell { width:36px; height:36px; position:relative; }
+  .cell input { width:100%; height:100%; padding:0; margin:0; text-align:center; font-size:1.2rem; text-transform:uppercase; border-radius:4px; border:2px solid #6c5fa0; background:#fff; color:#111; font-weight:700; }
+  .cell input.bad { background:#ffc9c9; }
+  .cell .num { position:absolute; top:1px; left:3px; font-size:.6rem; color:#555; pointer-events:none; z-index:1; }
+  /* word search */
+  .wgrid { display:grid; grid-template-columns:repeat(10,1fr); gap:2px; margin:16px auto; max-width:400px; }
+  .wgrid button { padding:0; height:34px; font-size:1rem; background:#3a3358; border-radius:6px; flex:none; }
+  .wgrid button.sel { background:var(--t2); }
+  .wgrid button.found { background:var(--ok); color:#111; }
+  .words { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .words span { background:var(--card); padding:6px 10px; border-radius:8px; }
+  .words span.found { text-decoration:line-through; color:var(--ok); }
+  /* key scene */
+  .cab2 { position:relative; width:260px; height:300px; margin:0 auto; perspective:800px; background:#2a2118; border:8px solid #5c4a32; border-radius:10px; overflow:hidden; }
+  .cab2 .dl, .cab2 .dr { position:absolute; top:0; width:50%; height:100%; background:linear-gradient(145deg,#8a8f98,#5a5f68); z-index:3; font-size:2.4rem; display:grid; place-items:center; }
+  .cab2 .dl { left:0; transform-origin:left center; } .cab2 .dr { right:0; transform-origin:right center; }
+  .cab2.play .dl { animation:openL 1.2s .5s forwards ease-in-out; }
+  .cab2.play .dr { animation:openR 1.2s .5s forwards ease-in-out; }
+  @keyframes openL { to { transform:rotateY(-105deg); } }
+  @keyframes openR { to { transform:rotateY(105deg); } }
+  .cab2 .glow { position:absolute; inset:0; background:radial-gradient(circle at 50% 40%, #ffe066, transparent 60%); opacity:0; z-index:1; }
+  .cab2.play .glow { animation:glow 1s 1.2s forwards; }
+  @keyframes glow { to { opacity:.9; } }
+  .cab2 .key { position:absolute; left:50%; top:-80px; width:80px; margin-left:-40px; z-index:2; opacity:0; }
+  .cab2.play .key { animation:drop 1.6s 1.8s forwards cubic-bezier(.3,.1,.5,1); }
+  @keyframes drop { 0% { opacity:1; top:20px; transform:rotate(0); } 55% { opacity:1; top:200px; transform:rotate(200deg); } 70% { top:170px; transform:rotate(260deg); } 85% { top:215px; transform:rotate(330deg); } 100% { opacity:1; top:205px; transform:rotate(360deg); } }
+  .spark { position:absolute; width:8px; height:8px; background:#ffe066; border-radius:50%; opacity:0; z-index:4; }
+  .cab2.play .spark { animation:spark 1s 3.2s ease-out forwards; }
+  @keyframes spark { 0% { opacity:1; transform:translate(0,0); } 100% { opacity:0; transform:translate(var(--dx),var(--dy)); } }
+  /* door scene */
+  .doorwrap { width:200px; height:300px; margin:0 auto; perspective:900px; background:#8ecae6; border:10px solid #3d2f1e; border-radius:6px 6px 0 0; position:relative; overflow:hidden; }
+  .doorwrap .door3 { position:absolute; inset:0; background:#8d5a3b; transform-origin:left center; transition:transform 1.6s ease-in-out; display:grid; place-items:center; font-size:3rem; }
+  .doorwrap.open .door3 { transform:rotateY(-110deg); }
+  .doorwrap .outside { position:absolute; inset:0; background:linear-gradient(#8ecae6 60%,#3a7d44 60%); }
+  .keyfly { position:absolute; left:50%; bottom:-60px; width:60px; margin-left:-30px; z-index:5; transition:all 1s ease-in-out; }
+  .doorwrap.unlocking .keyfly { bottom:120px; transform:rotate(90deg); }
+  /* outside */
+  #outside canvas { width:100%; max-width:640px; background:#3a7d44; border-radius:12px; border:4px solid #3d2f1e; image-rendering:pixelated; touch-action:none; }
+  .controls { display:flex; gap:16px; justify-content:center; align-items:center; margin-top:12px; flex-wrap:wrap; text-align:left; }
+  .controls .box { background:var(--card); border-radius:12px; padding:10px 14px; font-size:.9rem; color:var(--muted); }
+  .controls .box b { color:var(--text); }
+  .keycap { display:inline-block; min-width:24px; padding:2px 6px; border:2px solid #6c5fa0; border-radius:6px; background:#2c2545; color:var(--text); text-align:center; font-size:.8rem; margin:0 1px; }
+  .dpad { display:grid; grid-template-columns:repeat(3,52px); grid-template-rows:repeat(2,52px); gap:4px; }
+  .dpad button { padding:0; font-size:1.2rem; background:#3a3358; border-radius:10px; flex:none; touch-action:none; }
+  .dot { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -99,15 +153,77 @@
     <button class="tile bt" id="exGrammar">&#9997; <span id="grammarName"></span><small>questions</small></button>
   </div>
   <div class="status" id="hubMsg"></div>
+  <button class="b1" id="goOutside" style="display:none;margin-top:12px;width:100%;padding:16px;background:var(--ok)">Go outside</button>
   <button id="testSwitch" style="display:none;margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358"></button>
   <button id="hubLobby" style="margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358">Back to lobby</button>
 </section>
 
-<section id="safe" class="screen">
-  <h1>The safe is open!</h1>
-  <div class="score">&#128275;</div>
-  <p>You paid 100 coins. What is inside comes later.</p>
-  <button class="b1" id="safeBack" style="width:100%;padding:16px;background:var(--ok)">Back to menu</button>
+<section id="safe" class="screen" style="width:min(96vw,520px)">
+  <h1>The cabinet</h1>
+  <p id="safeHelp"></p>
+  <div class="cabinet">
+    <button id="safeL"><span class="wheel">&#128274;</span><b>Left safe</b><small>Team 1: crossword</small><small id="safeLs"></small></button>
+    <button id="safeR"><span class="wheel">&#128274;</span><b>Right safe</b><small>Team 2: word search</small><small id="safeRs"></small></button>
+  </div>
+  <div class="status" id="safeMsg"></div>
+  <button id="safeBack" style="margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358">Back to menu</button>
+</section>
+
+<section id="cross" class="screen" style="width:min(96vw,520px)">
+  <h1>Left safe</h1>
+  <p>Write the ordinal numbers in letters. Example: 1st = first.</p>
+  <div id="crossGrid" class="cgrid"></div>
+  <div class="words" id="crossClues"></div>
+  <div class="status" id="crossMsg"></div>
+  <button class="b1" id="crossCheck" style="width:100%;padding:14px;background:var(--ok)">Check</button>
+  <button id="crossBack" style="margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358">Back</button>
+</section>
+
+<section id="wsearch" class="screen" style="width:min(96vw,520px)">
+  <h1>Right safe</h1>
+  <p>Find the words about time. Tap the first letter and then the last letter of a word.</p>
+  <div class="words" id="wsWords"></div>
+  <div id="wsGrid" class="wgrid"></div>
+  <div class="status" id="wsMsg"></div>
+  <button id="wsBack" style="margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358">Back</button>
+</section>
+
+<section id="keyScene" class="screen" style="width:min(96vw,520px)">
+  <h1 id="keyTitle">Both safes are open!</h1>
+  <div class="cab2" id="cab2">
+    <div class="glow"></div>
+    <div class="dl">&#128274;</div><div class="dr">&#128274;</div>
+    <svg class="key" viewBox="0 0 100 40"><circle cx="18" cy="20" r="14" fill="none" stroke="#ffd43b" stroke-width="7"/><rect x="30" y="17" width="62" height="7" fill="#ffd43b"/><rect x="72" y="22" width="7" height="12" fill="#ffd43b"/><rect x="84" y="22" width="7" height="9" fill="#ffd43b"/></svg>
+    <i class="spark" style="left:45%;top:70%;--dx:-70px;--dy:-60px"></i><i class="spark" style="left:50%;top:72%;--dx:0;--dy:-90px"></i><i class="spark" style="left:55%;top:70%;--dx:70px;--dy:-60px"></i><i class="spark" style="left:48%;top:75%;--dx:-40px;--dy:-30px"></i><i class="spark" style="left:52%;top:75%;--dx:40px;--dy:-30px"></i>
+  </div>
+  <button class="b1" id="takeKey" style="display:none;margin-top:20px;width:100%;padding:16px;background:var(--ok)">Take the key</button>
+</section>
+
+<section id="doorScene" class="screen" style="width:min(96vw,520px)">
+  <h1>Open the door</h1>
+  <div class="doorwrap" id="doorwrap">
+    <div class="outside"></div>
+    <div class="door3">&#128682;</div>
+    <svg class="keyfly" viewBox="0 0 100 40"><circle cx="18" cy="20" r="14" fill="none" stroke="#ffd43b" stroke-width="7"/><rect x="30" y="17" width="62" height="7" fill="#ffd43b"/><rect x="72" y="22" width="7" height="12" fill="#ffd43b"/><rect x="84" y="22" width="7" height="9" fill="#ffd43b"/></svg>
+  </div>
+  <button class="b1" id="useKey" style="margin-top:20px;width:100%;padding:16px;background:var(--ok)">Use the key</button>
+</section>
+
+<section id="outside" class="screen" style="width:min(96vw,680px)">
+  <canvas id="map" width="640" height="384"></canvas>
+  <div class="controls">
+    <div class="box"><b>Controls</b><br>
+      Move: <span class="keycap">&#8593;</span><span class="keycap">&#8592;</span><span class="keycap">&#8595;</span><span class="keycap">&#8594;</span> or <span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><br>
+      On a phone: use the buttons.</div>
+    <div class="dpad">
+      <span></span><button id="dUp">&#9650;</button><span></span>
+      <button id="dLeft">&#9664;</button><button id="dDown">&#9660;</button><button id="dRight">&#9654;</button>
+    </div>
+    <div class="box"><b>Who is who</b><br>
+      <span class="dot" id="dotMe"></span><span id="whoMe"></span><br>
+      <span class="dot" id="dotOther"></span><span id="whoOther"></span></div>
+  </div>
+  <button id="outBack" style="margin-top:14px;padding:12px 20px;font-size:1rem;background:#3a3358">Back to menu</button>
 </section>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -156,7 +272,7 @@ function leave() {
   peer = conn = null; me = other = null;
   names[1] = names[2] = ''; scores[1] = scores[2] = null;
   $('startQuiz').style.display = 'none'; $('lobbyHub').style.display = 'none';
-  money = 0; bestQuiz = 0; quizDone = false; $('money').textContent = 0;
+  money = 0; bestQuiz = 0; quizDone = false; $('money').textContent = 0; resetProgress();
   $('nameInput').value = '';
   $('nameCard').style.display = 'none';
   $('players').style.display = 'none';
@@ -212,10 +328,13 @@ function setupConn(c) {
     $('players').style.display = 'flex';
     if (names[me]) c.send({ team: me, name: names[me] });
     if (scores[me] !== null) c.send({ team: me, score: scores[me] });
+    if (safeDone[me]) c.send({ safeDone: me });
   });
   c.on('data', d => {
     if (d.name !== undefined) names[d.team] = d.name;
     if (d.score !== undefined) scores[d.team] = d.score;
+    if (d.safeDone) partnerSolved(d.safeDone);
+    if (d.pos) { partner.tx = d.pos.x; partner.ty = d.pos.y; if (!partner.seen) { partner.x = d.pos.x; partner.y = d.pos.y; } partner.seen = performance.now(); }
     render();
   });
   c.on('close', () => {
@@ -422,7 +541,7 @@ $('hubLobby').onclick = () => testMode ? exitTest() : show('lobby');
 // ---- Test mode: play alone, no connection ----
 let testMode = false;
 $('testBtn').onclick = () => {
-  testMode = true; me = 1; other = 2;
+  testMode = true; me = 1; other = 2; resetProgress();
   money = 0; bestQuiz = 0; quizDone = true; scores[1] = scores[2] = null;
   toHub('Test mode: you play alone, no second player needed.');
 };
@@ -432,16 +551,346 @@ $('testSwitch').onclick = () => {
   toHub(`Now testing as Team ${me}.`);
 };
 function exitTest() {
-  testMode = false; me = other = null;
+  testMode = false; me = other = null; resetProgress();
   money = 0; bestQuiz = 0; quizDone = false; scores[1] = scores[2] = null;
   $('menuStatus').textContent = '';
   show('menu');
 }
 $('safeBack').onclick = () => toHub();
+
+
+// ======================= SAFE ROOM =======================
+let safeUnlocked = false, cabinetPlayed = false, outsideOpen = false;
+const safeDone = { 1: false, 2: false };
+
+function resetProgress() {
+  safeUnlocked = cabinetPlayed = outsideOpen = false;
+  safeDone[1] = safeDone[2] = false;
+  crossState = null; wsState = null;
+  $('goOutside').style.display = 'none';
+}
+
 $('safeBtn').onclick = () => {
-  if (money >= 100) { setMoney(money - 100); show('safe'); }
-  else $('hubMsg').textContent = `You need 100 coins to open the safe. You have ${money}.`;
+  if (!safeUnlocked) {
+    if (money < 100) { $('hubMsg').textContent = `You need 100 coins to open the safe. You have ${money}.`; return; }
+    setMoney(money - 100); safeUnlocked = true;
+  }
+  enterSafe();
 };
+
+function enterSafe() {
+  show('safe');
+  const mine = side => testMode || me === side;
+  $('safeHelp').textContent = testMode
+    ? 'Test mode: you can open both safes. Solve both to open the cabinet.'
+    : `You are Team ${me}: open the ${me === 1 ? 'LEFT' : 'RIGHT'} safe. Your partner opens the other one. When both are solved, the cabinet opens.`;
+  [[1, 'safeL', 'safeLs'], [2, 'safeR', 'safeRs']].forEach(([t, id, st]) => {
+    const btn = $(id);
+    btn.disabled = !mine(t);
+    btn.classList.toggle('done', safeDone[t]);
+    btn.querySelector('.wheel').textContent = safeDone[t] ? '✅' : (mine(t) ? '🔒' : '🔐');
+    $(st).textContent = safeDone[t] ? 'Solved!' : (mine(t) ? 'Tap to open' : `Team ${t} is working on it`);
+  });
+  $('safeMsg').textContent = '';
+  if (safeDone[1] && safeDone[2]) playKeyScene();
+}
+$('safeL').onclick = () => openCross();
+$('safeR').onclick = () => openWsearch();
+
+function solved(team) {
+  safeDone[team] = true;
+  if (conn && conn.open) conn.send({ safeDone: team });
+  enterSafe();
+}
+
+// Called when the partner solved their safe
+function partnerSolved(team) {
+  safeDone[team] = true;
+  const cur = document.querySelector('.screen.active').id;
+  if (cur === 'safe') enterSafe();
+  else if (cur === 'hub' && safeDone[1] && safeDone[2]) $('hubMsg').textContent = 'Both safes are solved! Go to the safe.';
+}
+
+// ---------- Left safe: crossword with ordinal numbers ----------
+const CROSS = [
+  { n: 1, dir: 'across', r: 0, c: 3, word: 'SECOND', clue: '2nd' },
+  { n: 1, dir: 'down', r: 0, c: 3, word: 'SEVENTH', clue: '7th' },
+  { n: 2, dir: 'down', r: 0, c: 7, word: 'NINTH', clue: '9th' },
+  { n: 3, dir: 'across', r: 3, c: 3, word: 'EIGHTH', clue: '8th' },
+  { n: 4, dir: 'across', r: 5, c: 0, word: 'FIFTH', clue: '5th' },
+];
+const CROSS_ROWS = 7, CROSS_COLS = 9;
+let crossState = null;
+
+function crossSolution() {
+  const sol = {};
+  CROSS.forEach(w => [...w.word].forEach((ch, i) => {
+    const r = w.r + (w.dir === 'down' ? i : 0), c = w.c + (w.dir === 'across' ? i : 0);
+    sol[r + ',' + c] = ch;
+  }));
+  return sol;
+}
+
+function openCross() {
+  show('cross');
+  if (crossState) return;
+  crossState = crossSolution();
+  const grid = $('crossGrid');
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `repeat(${CROSS_COLS}, 36px)`;
+  for (let r = 0; r < CROSS_ROWS; r++) for (let c = 0; c < CROSS_COLS; c++) {
+    const d = document.createElement('div'); d.className = 'cell';
+    if (crossState[r + ',' + c]) {
+      const inp = document.createElement('input');
+      inp.maxLength = 1; inp.dataset.r = r; inp.dataset.c = c; inp.autocomplete = 'off';
+      inp.oninput = () => { inp.value = inp.value.replace(/[^a-z]/gi, '').toUpperCase(); inp.classList.remove('bad'); if (inp.value) crossNext(r, c); };
+      d.appendChild(inp);
+      CROSS.filter(w => w.r === r && w.c === c).forEach((w, k) => {
+        if (k === 0) { const n = document.createElement('span'); n.className = 'num'; n.textContent = w.n; d.appendChild(n); }
+      });
+    }
+    grid.appendChild(d);
+  }
+  $('crossClues').innerHTML = CROSS.map(w => `<span>${w.n} ${w.dir}: <b>${w.clue}</b></span>`).join('');
+  $('crossMsg').textContent = '';
+}
+
+function crossNext(r, c) {
+  // go right if there is a letter cell there, otherwise down
+  const find = (rr, cc) => document.querySelector(`#crossGrid input[data-r="${rr}"][data-c="${cc}"]`);
+  const next = find(r, c + 1) || find(r + 1, c);
+  if (next) next.focus();
+}
+
+function checkCross() {
+  const sol = crossSolution();
+  let ok = true, empty = false;
+  document.querySelectorAll('#crossGrid input').forEach(inp => {
+    const want = sol[inp.dataset.r + ',' + inp.dataset.c];
+    if (!inp.value) { empty = true; ok = false; return; }
+    const good = inp.value.toUpperCase() === want;
+    inp.classList.toggle('bad', !good);
+    if (!good) ok = false;
+  });
+  if (ok) { $('crossMsg').innerHTML = '<span class="ok">Correct! The left safe opens.</span>'; setTimeout(() => solved(1), 900); }
+  else $('crossMsg').textContent = empty ? 'Fill in all the letters first.' : 'Some letters are wrong (red). Try again.';
+}
+$('crossCheck').onclick = checkCross;
+$('crossBack').onclick = () => enterSafe();
+
+// ---------- Right safe: word search about time ----------
+const WS_WORDS = ['HOUR', 'MINUTE', 'SECOND', 'CLOCK', 'QUARTER', 'PAST'];
+let wsState = null;
+
+function makeWordSearch() {
+  const N = 10, dirs = [[0, 1], [1, 0], [1, 1]];
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const g = Array.from({ length: N }, () => Array(N).fill(''));
+    let ok = true;
+    for (const w of WS_WORDS) {
+      let placed = false;
+      for (let t = 0; t < 100 && !placed; t++) {
+        const [dr, dc] = dirs[rnd(0, 2)], r = rnd(0, N - 1), c = rnd(0, N - 1);
+        const er = r + dr * (w.length - 1), ec = c + dc * (w.length - 1);
+        if (er >= N || ec >= N) continue;
+        let fits = true;
+        for (let i = 0; i < w.length; i++) { const ch = g[r + dr * i][c + dc * i]; if (ch && ch !== w[i]) { fits = false; break; } }
+        if (!fits) continue;
+        for (let i = 0; i < w.length; i++) g[r + dr * i][c + dc * i] = w[i];
+        placed = true;
+      }
+      if (!placed) { ok = false; break; }
+    }
+    if (ok) {
+      const L = 'ABCDEFGHIJKLMNOPRSTUVW';
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!g[r][c]) g[r][c] = L[rnd(0, L.length - 1)];
+      return g;
+    }
+  }
+}
+
+function openWsearch() {
+  show('wsearch');
+  if (!wsState) wsState = { grid: makeWordSearch(), found: new Set(), foundCells: new Set(), first: null };
+  renderWs();
+}
+
+function renderWs() {
+  const st = wsState, el = $('wsGrid');
+  el.innerHTML = '';
+  st.grid.forEach((row, r) => row.forEach((ch, c) => {
+    const b = document.createElement('button');
+    b.textContent = ch;
+    const key = r + ',' + c;
+    if (st.foundCells.has(key)) b.classList.add('found');
+    if (st.first && st.first[0] === r && st.first[1] === c) b.classList.add('sel');
+    b.onclick = () => wsClick(r, c);
+    el.appendChild(b);
+  }));
+  $('wsWords').innerHTML = WS_WORDS.map(w => `<span class="${st.found.has(w) ? 'found' : ''}">${w}</span>`).join('');
+}
+
+function wsClick(r, c) {
+  const st = wsState;
+  if (!st.first) { st.first = [r, c]; return renderWs(); }
+  const [r1, c1] = st.first; st.first = null;
+  const dr = r - r1, dc = c - c1, steps = Math.max(Math.abs(dr), Math.abs(dc));
+  $('wsMsg').textContent = '';
+  if (steps > 0 && (dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc))) {
+    const sr = Math.sign(dr), sc = Math.sign(dc), cells = [];
+    let str = '';
+    for (let i = 0; i <= steps; i++) { cells.push((r1 + sr * i) + ',' + (c1 + sc * i)); str += st.grid[r1 + sr * i][c1 + sc * i]; }
+    const rev = [...str].reverse().join('');
+    const hit = WS_WORDS.find(w => (w === str || w === rev) && !st.found.has(w));
+    if (hit) {
+      st.found.add(hit); cells.forEach(k => st.foundCells.add(k));
+      $('wsMsg').innerHTML = `<span class="ok">Found: ${hit}</span>`;
+      renderWs();
+      if (st.found.size === WS_WORDS.length) {
+        $('wsMsg').innerHTML = '<span class="ok">All words found! The right safe opens.</span>';
+        setTimeout(() => solved(2), 1000);
+      }
+      return;
+    }
+  }
+  $('wsMsg').textContent = 'That is not a word from the list.';
+  renderWs();
+}
+$('wsBack').onclick = () => enterSafe();
+
+// ---------- Cabinet opens, key falls out ----------
+function playKeyScene() {
+  cabinetPlayed = true;
+  show('keyScene');
+  const cab = $('cab2');
+  $('takeKey').style.display = 'none';
+  cab.classList.remove('play'); void cab.offsetWidth; cab.classList.add('play');
+  setTimeout(() => { $('takeKey').style.display = 'block'; }, 3600);
+}
+$('takeKey').onclick = () => { $('doorwrap').classList.remove('open', 'unlocking'); $('useKey').disabled = false; show('doorScene'); };
+$('useKey').onclick = () => {
+  $('useKey').disabled = true;
+  const w = $('doorwrap');
+  w.classList.add('unlocking');
+  setTimeout(() => w.classList.add('open'), 1100);
+  setTimeout(() => { outsideOpen = true; enterOutside(); }, 3200);
+};
+
+// ======================= OUTSIDE MAP =======================
+const TS = 32;
+const MAP = [
+  'TTTTTTTTTTTTTTTTTTTT',
+  'T....HHHH.......f..T',
+  'T....HHHH...TT.....T',
+  'T....HHDH..........T',
+  'T....ppp.....WWW...T',
+  'T....ppppppp.WWW.f.T',
+  'T.f.......pp.WWW...T',
+  'T.....TT..pp.......T',
+  'T.....TT..ppppppp..T',
+  'T.f.......pp....p..T',
+  'T.....f...pp....p.fT',
+  'TTTTTTTTTTTTTTTTTTTT',
+];
+const TEAM_COLOR = { 1: '#ff6b6b', 2: '#4dabf7' };
+const keys = {};
+const player = { x: 6 * TS + 16, y: 4 * TS + 20 };
+const partner = { x: 0, y: 0, tx: 0, ty: 0, seen: 0 };
+let loopOn = false, lastSend = 0, botDir = [0, 0], botTimer = 0;
+
+const solidTile = (x, y) => {
+  const c = Math.floor(x / TS), r = Math.floor(y / TS);
+  if (r < 0 || c < 0 || r >= MAP.length || c >= MAP[0].length) return true;
+  return 'TWHD'.includes(MAP[r][c]);
+};
+const blocked = (x, y) => solidTile(x - 6, y - 6) || solidTile(x + 6, y - 6) || solidTile(x - 6, y) || solidTile(x + 6, y);
+
+function enterOutside() {
+  show('outside');
+  $('goOutside').style.display = 'block';
+  player.x = 6 * TS + 16; player.y = 4 * TS + 20;
+  $('dotMe').style.background = TEAM_COLOR[me];
+  $('dotOther').style.background = TEAM_COLOR[other];
+  $('whoMe').textContent = `You: ${names[me] || 'Team ' + me} (Team ${me})`;
+  $('whoOther').textContent = testMode ? `Partner bot (Team ${other})` : `Partner: ${names[other] || 'Team ' + other} (Team ${other})`;
+  if (testMode) { partner.x = partner.tx = 7 * TS; partner.y = partner.ty = 5 * TS; partner.seen = Infinity; }
+  if (!loopOn) { loopOn = true; requestAnimationFrame(tick); }
+}
+$('goOutside').onclick = () => enterOutside();
+$('outBack').onclick = () => toHub();
+
+window.addEventListener('keydown', e => {
+  if (!$('outside').classList.contains('active')) return;
+  const k = e.key.toLowerCase();
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) { keys[k] = true; e.preventDefault(); }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+[['dUp', 'arrowup'], ['dDown', 'arrowdown'], ['dLeft', 'arrowleft'], ['dRight', 'arrowright']].forEach(([id, k]) => {
+  const b = $(id);
+  b.addEventListener('pointerdown', e => { keys[k] = true; e.preventDefault(); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { keys[k] = false; }));
+});
+
+function step(o, dx, dy) {
+  if (!blocked(o.x + dx, o.y)) o.x += dx;
+  if (!blocked(o.x, o.y + dy)) o.y += dy;
+}
+
+function tick(t) {
+  if (!$('outside').classList.contains('active')) { loopOn = false; return; }
+  const sp = 2.4;
+  let dx = 0, dy = 0;
+  if (keys.arrowleft || keys.a) dx -= sp;
+  if (keys.arrowright || keys.d) dx += sp;
+  if (keys.arrowup || keys.w) dy -= sp;
+  if (keys.arrowdown || keys.s) dy += sp;
+  if (dx && dy) { dx *= .707; dy *= .707; }
+  step(player, dx, dy);
+
+  if (testMode) {
+    // a simple bot that wanders around
+    if (t > botTimer) { botTimer = t + 800 + Math.random() * 1500; botDir = [rnd(-1, 1) * 1.2, rnd(-1, 1) * 1.2]; }
+    step(partner, botDir[0], botDir[1]);
+    partner.tx = partner.x; partner.ty = partner.y;
+  } else {
+    partner.x += (partner.tx - partner.x) * 0.25;
+    partner.y += (partner.ty - partner.y) * 0.25;
+    if (conn && conn.open && t - lastSend > 80) { lastSend = t; conn.send({ pos: { x: Math.round(player.x), y: Math.round(player.y) }, team: me }); }
+  }
+  drawMap(t);
+  requestAnimationFrame(tick);
+}
+
+function drawPerson(x, y, color, label) {
+  const g = $('map').getContext('2d');
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x, y, 9, 4, 0, 0, 7); g.fill();
+  g.fillStyle = color; g.fillRect(x - 6, y - 16, 12, 14);
+  g.fillStyle = '#ffdcb0'; g.beginPath(); g.arc(x, y - 21, 7, 0, 7); g.fill();
+  g.fillStyle = '#222'; g.fillRect(x - 3, y - 22, 2, 2); g.fillRect(x + 1, y - 22, 2, 2);
+  g.font = 'bold 12px system-ui'; g.textAlign = 'center';
+  g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 3;
+  g.strokeText(label, x, y - 33); g.fillText(label, x, y - 33);
+}
+
+function drawMap(t) {
+  const g = $('map').getContext('2d');
+  for (let r = 0; r < MAP.length; r++) for (let c = 0; c < MAP[0].length; c++) {
+    const ch = MAP[r][c], x = c * TS, y = r * TS;
+    g.fillStyle = (r + c) % 2 ? '#3f8a4a' : '#3a7d44'; g.fillRect(x, y, TS, TS);
+    if (ch === 'p') { g.fillStyle = '#c9a66b'; g.fillRect(x, y, TS, TS); g.fillStyle = '#b8955a'; g.fillRect(x + 6, y + 8, 4, 4); g.fillRect(x + 20, y + 20, 4, 4); }
+    if (ch === 'W') { g.fillStyle = '#3b82c4'; g.fillRect(x, y, TS, TS); g.fillStyle = 'rgba(255,255,255,.3)'; g.fillRect(x + 6 + (t / 300 + c) % 8, y + 10, 8, 2); }
+    if (ch === 'T') { g.fillStyle = '#5c3b1e'; g.fillRect(x + 13, y + 18, 6, 12); g.fillStyle = '#1f6b2e'; g.beginPath(); g.arc(x + 16, y + 14, 13, 0, 7); g.fill(); }
+    if (ch === 'f') { g.fillStyle = '#ff8fb1'; g.beginPath(); g.arc(x + 10, y + 12, 4, 0, 7); g.arc(x + 22, y + 20, 4, 0, 7); g.fill(); g.fillStyle = '#ffe066'; g.fillRect(x + 9, y + 11, 2, 2); g.fillRect(x + 21, y + 19, 2, 2); }
+    if (ch === 'H') { g.fillStyle = r < 3 ? '#b04a3a' : '#e8d7b9'; g.fillRect(x, y, TS, TS); if (r < 3) { g.fillStyle = '#8f3a2d'; g.fillRect(x, y + 28, TS, 4); } else { g.fillStyle = '#9ec9e8'; g.fillRect(x + 8, y + 8, 14, 12); } }
+    if (ch === 'D') { g.fillStyle = '#e8d7b9'; g.fillRect(x, y, TS, TS); g.fillStyle = '#6b3f22'; g.fillRect(x + 4, y + 2, 24, 30); g.fillStyle = '#ffd43b'; g.fillRect(x + 22, y + 17, 3, 3); }
+  }
+  const people = [
+    { y: player.y, x: player.x, color: TEAM_COLOR[me], label: (names[me] || 'You') },
+  ];
+  const showPartner = testMode || (conn && conn.open && partner.seen && performance.now() - partner.seen < 4000);
+  if (showPartner) people.push({ x: partner.x, y: partner.y, color: TEAM_COLOR[other], label: testMode ? 'Bot' : (names[other] || 'Partner') });
+  people.sort((a, b) => a.y - b.y).forEach(p => drawPerson(p.x, p.y, p.color, p.label));
+}
 </script>
 </body>
 </html>
