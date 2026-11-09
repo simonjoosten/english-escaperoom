@@ -26,6 +26,14 @@
   .player { flex:1; background:var(--card); border-radius:14px; padding:16px; }
   .player small { color:var(--muted); display:block; }
   .player b { font-size:1.2rem; word-break:break-word; }
+  .opts { display:flex; flex-wrap:wrap; gap:12px; margin-top:20px; }
+  .opts button { flex:1 1 40%; background:#3a3358; padding:18px 10px; }
+  .opts button.right { background:var(--ok); }
+  .opts button.wrong { background:var(--t1); }
+  .sentence { font-size:1.6rem; margin:24px 0 8px; line-height:1.4; }
+  .blank { display:inline-block; min-width:70px; border-bottom:3px solid var(--t2); color:var(--ok); }
+  .hint { color:var(--muted); min-height:1.4em; }
+  .score { font-size:3rem; font-weight:800; margin:16px 0; }
 </style>
 </head>
 <body>
@@ -55,10 +63,26 @@
     <button class="b1" id="saveName" style="width:100%;padding:14px;background:var(--ok)">Save</button>
   </div>
   <div class="players" id="players" style="display:none">
-    <div class="player"><small>Team 1</small><b id="n1">...</b></div>
-    <div class="player"><small>Team 2</small><b id="n2">...</b></div>
+    <div class="player"><small>Team 1</small><b id="n1">...</b><small id="s1"></small></div>
+    <div class="player"><small>Team 2</small><b id="n2">...</b><small id="s2"></small></div>
   </div>
+  <button class="b1" id="startQuiz" style="display:none;margin-top:20px;width:100%;padding:18px;background:var(--ok)">Start questions</button>
   <button id="leave" style="margin-top:24px;padding:12px 20px;font-size:1rem;background:#3a3358">Leave team</button>
+</section>
+
+<section id="quiz" class="screen">
+  <p id="qProgress"></p>
+  <div class="sentence" id="qSentence"></div>
+  <div class="hint" id="qHint"></div>
+  <div class="opts" id="qOpts"></div>
+  <p>Points: <b id="qPoints">0</b></p>
+</section>
+
+<section id="done" class="screen">
+  <h1>Well done!</h1>
+  <div class="score" id="finalScore"></div>
+  <p>Keep these points, you need them later.</p>
+  <button class="b1" id="backLobby" style="width:100%;padding:16px;background:#3a3358">Back</button>
 </section>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -83,6 +107,7 @@ const timer = setInterval(() => {
 // Team selection + linking
 let me, other, peer, conn, retry;
 const names = { 1: '', 2: '' };
+const scores = { 1: null, 2: null };
 
 $('pick1').onclick = () => start(1);
 $('pick2').onclick = () => start(2);
@@ -104,7 +129,8 @@ function leave() {
   if (conn) conn.close();
   if (peer) peer.destroy();
   peer = conn = null; me = other = null;
-  names[1] = names[2] = '';
+  names[1] = names[2] = ''; scores[1] = scores[2] = null;
+  $('startQuiz').style.display = 'none';
   $('nameInput').value = '';
   $('nameCard').style.display = 'none';
   $('players').style.display = 'none';
@@ -160,7 +186,11 @@ function setupConn(c) {
     $('players').style.display = 'flex';
     if (names[me]) c.send({ team: me, name: names[me] });
   });
-  c.on('data', d => { names[d.team] = d.name; render(); });
+  c.on('data', d => {
+    if (d.name !== undefined) names[d.team] = d.name;
+    if (d.score !== undefined) scores[d.team] = d.score;
+    render();
+  });
   c.on('close', () => {
     conn = null;
     $('lobbyStatus').textContent = `Team ${other} left. Waiting for them to come back...`;
@@ -173,12 +203,90 @@ $('saveName').onclick = () => {
   if (!name) return;
   names[me] = name;
   if (conn && conn.open) conn.send({ team: me, name });
+  $('startQuiz').style.display = 'block';
   render();
 };
 
 function render() {
   $('n1').textContent = names[1] || '...';
   $('n2').textContent = names[2] || '...';
+  $('s1').textContent = scores[1] === null ? '' : scores[1] + ' / 10 points';
+  $('s2').textContent = scores[2] === null ? '' : scores[2] + ' / 10 points';
+}
+
+// ---- Questions ----
+const QUESTIONS = {
+  1: { options: ['this', 'that', 'these', 'those'], items: [
+    ['___ is my book.', 'The book is in my hand. (one, near)', 'this'],
+    ['___ are your shoes over there.', 'The shoes are far away. (many, far)', 'those'],
+    ['___ cat on the roof is black.', 'The cat is far away. (one, far)', 'that'],
+    ['___ pencils are new.', 'The pencils are next to me. (many, near)', 'these'],
+    ['___ is a nice apple.', 'I am holding the apple. (one, near)', 'this'],
+    ['Look at ___ birds in the sky!', 'The birds are far away. (many, far)', 'those'],
+    ['___ chairs next to me are comfortable.', 'The chairs are close to me. (many, near)', 'these'],
+    ['___ house across the street is big.', 'The house is far away. (one, far)', 'that'],
+    ['Can you give me ___ pen?', 'The pen is on my desk, next to me. (one, near)', 'this'],
+    ['Who are ___ children over there?', 'The children are far away. (many, far)', 'those'],
+  ]},
+  2: { options: ['a', 'an'], items: [
+    ['I eat ___ apple every day.', '', 'an'],
+    ['He has ___ dog.', '', 'a'],
+    ['She sees ___ elephant at the zoo.', '', 'an'],
+    ['This is ___ yellow banana.', '', 'a'],
+    ['I need ___ umbrella today.', '', 'an'],
+    ['We have ___ egg for breakfast.', '', 'an'],
+    ['Look, ___ big house!', '', 'a'],
+    ['He wants ___ ice cream.', '', 'an'],
+    ['My sister has ___ orange bag.', '', 'an'],
+    ['There is ___ cat on the table.', '', 'a'],
+  ]},
+};
+
+let qi = 0, points = 0, locked = false;
+
+$('startQuiz').onclick = () => { qi = 0; points = 0; show('quiz'); showQuestion(); };
+$('backLobby').onclick = () => show('lobby');
+
+function showQuestion() {
+  locked = false;
+  const set = QUESTIONS[me], [sentence, hint] = set.items[qi];
+  $('qProgress').textContent = `Question ${qi + 1} / ${set.items.length}`;
+  $('qSentence').innerHTML = sentence.replace('___', '<span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;</span>');
+  $('qHint').textContent = hint;
+  $('qPoints').textContent = points;
+  $('qOpts').innerHTML = '';
+  set.options.forEach(o => {
+    const b = document.createElement('button');
+    b.textContent = o;
+    b.onclick = () => answer(b, o);
+    $('qOpts').appendChild(b);
+  });
+}
+
+function answer(btn, choice) {
+  if (locked) return;
+  locked = true;
+  const set = QUESTIONS[me], right = set.items[qi][2];
+  if (choice === right) { points++; btn.classList.add('right'); }
+  else {
+    btn.classList.add('wrong');
+    [...$('qOpts').children].forEach(b => { if (b.textContent === right) b.classList.add('right'); });
+  }
+  $('qPoints').textContent = points;
+  setTimeout(() => {
+    qi++;
+    if (qi < set.items.length) return showQuestion();
+    finishQuiz();
+  }, 1200);
+}
+
+function finishQuiz() {
+  scores[me] = points;
+  try { localStorage.setItem('escaperoom-points-team' + me, points); } catch (e) {}
+  if (conn && conn.open) conn.send({ team: me, score: points });
+  $('finalScore').textContent = points + ' / 10';
+  render();
+  show('done');
 }
 </script>
 </body>
