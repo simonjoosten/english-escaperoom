@@ -171,6 +171,10 @@
   .confetti i { position:absolute; top:-20px; width:10px; height:16px; border-radius:2px; animation:fall linear infinite; }
   @keyframes fall { to { transform:translateY(110vh) rotate(720deg); } }
   #skipLevel { position:fixed; right:14px; bottom:14px; z-index:30; flex:none; padding:10px 16px; font-size:.95rem; background:linear-gradient(180deg,#ffb347,#e07b00); }
+  .roomcode { font-size:3.4rem; font-weight:700; letter-spacing:.35em; padding-left:.35em; color:var(--gold); text-shadow:0 0 22px rgba(255,212,59,.45); margin:6px 0; }
+  .codeinput { text-align:center; font-size:2rem; letter-spacing:.35em; text-transform:uppercase; padding-left:.55em; }
+  #linkBadge { position:fixed; top:10px; left:10px; z-index:30; padding:6px 12px; border-radius:99px; font-size:.85rem; background:rgba(15,10,36,.85); border:1px solid var(--stroke); box-shadow:var(--shadow); }
+  #linkBadge.ok { border-color:rgba(61,220,132,.6); } #linkBadge.wait { border-color:rgba(255,212,59,.6); }
 </style>
 </head>
 <body>
@@ -184,7 +188,7 @@
 
 <section id="menu" class="screen">
   <h1>Choose your team</h1>
-  <p>Team 1 and Team 2 each press their own button to link up.</p>
+  <p>Team 1 makes a room code. Team 2 types that code to join. Team 1 goes first!</p>
   <div class="btns">
     <button class="b1 teambtn" id="pick1"><span class="big">&#129418;</span>Team 1</button>
     <button class="b2 teambtn" id="pick2"><span class="big">&#128044;</span>Team 2</button>
@@ -197,6 +201,19 @@
 <section id="lobby" class="screen">
   <h1 id="lobbyTitle"></h1>
   <div class="status" id="lobbyStatus"></div>
+  <div class="card" id="roomCard" style="display:none">
+    <div>Your room code</div>
+    <div class="roomcode" id="roomCode"></div>
+    <p style="margin:6px 0 12px">Tell this code to Team 2, or send them a link.</p>
+    <button id="copyLink" style="width:100%;padding:14px">Copy invite link</button>
+    <div class="status" id="copyMsg" style="font-size:.9rem;word-break:break-all"></div>
+  </div>
+  <div class="card" id="joinCard" style="display:none">
+    <label for="joinInput">Type the room code from Team 1</label>
+    <input id="joinInput" class="codeinput" maxlength="4" placeholder="ABCD" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <button class="b2" id="joinBtn" style="width:100%;padding:14px">Join</button>
+    <div class="status" id="joinMsg"></div>
+  </div>
   <div class="card" id="nameCard" style="display:none">
     <label for="nameInput">Fill in your team name</label>
     <input id="nameInput" maxlength="24" placeholder="Team name" autocomplete="off">
@@ -348,29 +365,41 @@
 
 <button id="skipLevel" style="display:none">Skip level (test)</button>
 
+<div id="linkBadge" style="display:none"></div>
+
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const show = id => { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); $(id).classList.add('active'); };
-
-// Team 1's id changes every 5 minutes, so a stuck/stale claim resets by itself.
-const slot = () => Math.floor(Date.now() / 300000);
-const team1Id = (s, i) => 'english-escaperoom-team1-' + s + '-' + i;
-const TRIES = 5; // if one id is stuck, Team 1 takes the next one and Team 2 tries all of them
-let tries = 0;
 
 // Loading screen
 let pct = 0;
 const timer = setInterval(() => {
   pct = Math.min(100, pct + 4 + Math.random() * 8);
   $('fill').style.width = pct + '%';
-  if (pct >= 100) { clearInterval(timer); setTimeout(() => show('menu'), 300); }
+  if (pct >= 100) { clearInterval(timer); setTimeout(() => { show('menu'); if (invite) start(2); }, 300); }
 }, 120);
 
-// Team selection + linking
-let me, other, peer, conn, retry;
+// Team selection + linking (room code system)
+// Team 1 makes a room with a 4-letter code. Team 2 types that code (or opens the invite link) to join.
+let me, other, peer, conn, retry, roomCode = '';
 const names = { 1: '', 2: '' };
 const scores = { 1: null, 2: null };
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';           // no I or O, they look like 1 and 0
+const makeCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+const roomId = code => 'english-escaperoom-room-' + code;
+const invite = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+let joinTries = 0;
+
+// the little badge at the top left: are we linked with the partner?
+function setLink(state) {
+  const el = $('linkBadge');
+  if (!me || testMode || !state) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const who = names[other] || `Team ${other}`;
+  el.className = state;
+  el.textContent = state === 'ok' ? `\u{1F7E2} Linked with ${who}` : `\u{1F7E1} ${roomCode && me === 1 ? 'Room ' + roomCode + ': ' : ''}waiting for ${who}...`;
+}
 
 $('pick1').onclick = () => start(1);
 $('pick2').onclick = () => start(2);
@@ -379,25 +408,37 @@ function start(team) {
   me = team; other = team === 1 ? 2 : 1;
   $('pick1').disabled = $('pick2').disabled = true;
   $('menuStatus').textContent = 'Connecting...';
-  if (typeof Peer === 'undefined') { $('menuStatus').textContent = 'Could not load the connection library. Check your internet.'; $('pick1').disabled = $('pick2').disabled = false; return; }
-  openPeer();
-  // Reset every 5 minutes: Team 1 gets a fresh id when the time window changes (unless already linked).
-  if (me === 1) slotTimer = setInterval(() => { if (!(conn && conn.open) && slot() !== currentSlot) openPeer(); }, 5000);
+  if (typeof Peer === 'undefined') { $('menuStatus').textContent = 'Could not load the connection library. Check your internet.'; $('pick1').disabled = $('pick2').disabled = false; me = other = null; return; }
+  $('lobbyTitle').textContent = `You are Team ${me}`;
+  if (me === 1) { roomCode = makeCode(); openHost(); }
+  else {
+    show('lobby');
+    $('roomCard').style.display = 'none'; $('joinCard').style.display = 'block';
+    $('lobbyStatus').textContent = 'Ask Team 1 for the room code.';
+    $('joinInput').value = invite; $('joinMsg').textContent = '';
+    if (invite.length === 4) joinRoom(invite); else $('joinInput').focus();
+  }
 }
-let slotTimer;
 window.addEventListener('beforeunload', () => peer && peer.destroy());
 
+function dropPeer() {
+  clearTimeout(retry);
+  if (peer) { peer._ignore = true; peer.destroy(); }
+  peer = null;
+}
+
 function leave() {
-  clearTimeout(retry); clearInterval(slotTimer);
-  if (conn) conn.close();
-  if (peer) peer.destroy();
-  peer = conn = null; me = other = null;
+  me = other = null;                       // so nothing tries to reconnect
+  dropPeer();
+  if (conn) { try { conn.close(); } catch (e) {} }
+  conn = null; roomCode = '';
   names[1] = names[2] = ''; scores[1] = scores[2] = null;
   $('startQuiz').style.display = 'none'; $('lobbyHub').style.display = 'none';
   money = 0; bestQuiz = 0; quizDone = false; $('money').textContent = 0; resetProgress();
   $('nameInput').value = '';
-  $('nameCard').style.display = 'none';
-  $('players').style.display = 'none';
+  $('nameCard').style.display = 'none'; $('players').style.display = 'none';
+  $('roomCard').style.display = 'none'; $('joinCard').style.display = 'none';
+  setLink(null);
   render();
   $('menuStatus').textContent = '';
   $('pick1').disabled = $('pick2').disabled = false;
@@ -405,65 +446,95 @@ function leave() {
 }
 $('leave').onclick = leave;
 
-let currentSlot;
-function openPeer() {
-  clearTimeout(retry);
-  if (peer) peer.destroy();
-  if (slot() !== currentSlot) tries = 0;
-  currentSlot = slot();
-  // Team 1 uses an id of the current 5 minute window; Team 2 uses a random id.
-  peer = me === 1 ? new Peer(team1Id(currentSlot, tries)) : new Peer();
-  peer.on('error', err => {
-    if (err.type === 'unavailable-id') {
-      // Stale id on the server: take the next one.
-      tries = (tries + 1) % TRIES;
-      $('menuStatus').textContent = 'Team 1 is still busy, trying again...';
-      retry = setTimeout(openPeer, 800);
-    } else if (err.type === 'peer-unavailable') {
-      // other team has not pressed yet: keep trying
-    } else {
-      $('menuStatus').textContent = 'Connection problem: ' + err.type;
-      retry = setTimeout(openPeer, 3000);
+// ---- Team 1: make the room and wait
+function openHost() {
+  dropPeer();
+  const p = peer = new Peer(roomId(roomCode));
+  p.on('error', err => {
+    if (p._ignore) return;
+    if (err.type === 'unavailable-id') { roomCode = makeCode(); retry = setTimeout(openHost, 200); }   // code taken: pick another
+    else { $('menuStatus').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(openHost, 2500); }
+  });
+  p.on('open', () => {
+    show('lobby');
+    $('joinCard').style.display = 'none';
+    if (!(conn && conn.open)) {
+      $('roomCard').style.display = 'block'; $('roomCode').textContent = roomCode;
+      $('lobbyStatus').textContent = 'Waiting for Team 2 to join...';
+      setLink('wait');
     }
   });
-  peer.on('open', () => {
-    show('lobby');
-    $('lobbyTitle').textContent = `You are Team ${me}`;
-    $('lobbyStatus').textContent = `Waiting for Team ${other} to press their button...`;
-    peer.on('connection', c => setupConn(c));
-    if (me === 2) tryConnect();
-  });
+  p.on('connection', c => setupConn(c));
+  p.on('disconnected', () => { if (!p._ignore) try { p.reconnect(); } catch (e) {} });
+  p.on('close', () => { if (!p._ignore && me === 1) retry = setTimeout(openHost, 1500); });
 }
 
+// ---- Team 2: join with the code
+function joinRoom(code) {
+  code = (code || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (code.length !== 4) { $('joinMsg').textContent = 'The code has 4 letters.'; return; }
+  roomCode = code; joinTries = 0;
+  dropPeer();
+  $('joinMsg').textContent = 'Connecting...';
+  setLink('wait');
+  const p = peer = new Peer();
+  p.on('error', err => {
+    if (p._ignore) return;
+    if (err.type === 'peer-unavailable') {
+      joinTries++;
+      if (joinTries >= 1 && !(conn && conn.open)) $('joinMsg').textContent = `Cannot find room ${roomCode} yet. Check the code, or wait until Team 1 has pressed their button.`;
+    } else { $('joinMsg').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(() => joinRoom(roomCode), 3000); }
+  });
+  p.on('open', () => tryConnect());
+  p.on('disconnected', () => { if (!p._ignore) try { p.reconnect(); } catch (e) {} });
+  p.on('close', () => { if (!p._ignore && me === 2 && roomCode) retry = setTimeout(() => joinRoom(roomCode), 1500); });
+}
 function tryConnect() {
-  if (conn && conn.open) return;
-  for (let i = 0; i < TRIES; i++) setupConn(peer.connect(team1Id(slot(), i), { reliable: true }));
+  if (!peer || (conn && conn.open)) return;
+  setupConn(peer.connect(roomId(roomCode), { reliable: true }));
   retry = setTimeout(tryConnect, 2500);
 }
+$('joinBtn').onclick = () => joinRoom($('joinInput').value);
+$('joinInput').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+  if (e.target.value.length === 4) joinRoom(e.target.value);       // join as soon as the 4th letter is typed
+});
+$('copyLink').onclick = async () => {
+  const link = `${location.origin}${location.pathname}?room=${roomCode}`;
+  try { await navigator.clipboard.writeText(link); $('copyMsg').textContent = 'Link copied! Send it to Team 2.'; }
+  catch (e) { $('copyMsg').textContent = link; }
+};
 
+// ---- the link between the two players
 function setupConn(c) {
   if (conn && conn.open) { c.close(); return; }
   c.on('open', () => {
+    if (conn && conn.open && conn !== c) { c.close(); return; }
     conn = c; clearTimeout(retry);
+    $('roomCard').style.display = 'none'; $('joinCard').style.display = 'none';
     $('lobbyStatus').innerHTML = '<span class="ok">Linked!</span> Fill in your team name.';
     $('nameCard').style.display = 'block';
     $('players').style.display = 'flex';
+    setLink('ok');
     if (names[me]) c.send({ team: me, name: names[me] });
     if (scores[me] !== null) c.send({ team: me, score: scores[me] });
     if (safeDone[me]) c.send({ safeDone: me });
     if (window.onNetOpen) onNetOpen(c);
   });
   c.on('data', d => {
-    if (d.name !== undefined) names[d.team] = d.name;
+    if (d.name !== undefined) { names[d.team] = d.name; if (conn && conn.open) setLink('ok'); }
     if (d.score !== undefined) scores[d.team] = d.score;
     if (d.safeDone) partnerSolved(d.safeDone);
     if (window.onNet) onNet(d);
     render();
   });
   c.on('close', () => {
+    if (conn !== c) return;
     conn = null;
-    $('lobbyStatus').textContent = `Team ${other} left. Waiting for them to come back...`;
-    if (me === 2) tryConnect();
+    if (!me) return;
+    $('lobbyStatus').textContent = `Lost the link with Team ${other}. Linking again...`;
+    setLink('wait');
+    if (me === 2) tryConnect();           // Team 2 keeps trying until Team 1 is back
   });
 }
 
@@ -942,6 +1013,6 @@ $('useKey').onclick = () => {
 };
 
 </script>
-<script src="world.js?v=20261109d"></script>
+<script src="world.js?v=20261110a"></script>
 </body>
 </html>
