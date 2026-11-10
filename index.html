@@ -176,6 +176,24 @@
   #linkBadge { position:fixed; top:10px; left:10px; z-index:30; padding:6px 12px; border-radius:99px; font-size:.85rem; background:rgba(15,10,36,.85); border:1px solid var(--stroke); box-shadow:var(--shadow); }
   #linkBadge.ok { border-color:rgba(61,220,132,.6); } #linkBadge.wait { border-color:rgba(255,212,59,.6); }
   .netinfo { font-size:.9rem; color:var(--muted); background:var(--card); border:1px solid var(--stroke); border-radius:14px; padding:10px 14px; margin:12px 0; line-height:1.6; }
+  /* last level */
+  .codebar { display:flex; gap:10px; justify-content:center; margin:10px 0 16px; }
+  .codebar span { width:58px; height:68px; border-radius:14px; display:grid; place-items:center; font-size:2.2rem; font-weight:700; background:rgba(255,255,255,.08); border:2px dashed var(--stroke); color:#fff5; }
+  .codebar span.got { background:linear-gradient(180deg,#ffe066,#f0a500); color:#4a2c00; border:2px solid #fff6; box-shadow:0 0 22px rgba(255,212,59,.6); animation:pop .6s; }
+  .clockgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0; }
+  .ctask { display:flex; flex-direction:column; gap:4px; padding:22px 10px; font-size:1.15rem; background:linear-gradient(180deg,#5b4fa8,#41377d); border-top:6px solid transparent; }
+  .ctask.t1 { border-top-color:var(--t1); } .ctask.t2 { border-top-color:var(--t2); }
+  .ctask span { font-weight:400; font-size:.85rem; color:#fffb; }
+  .ctask.done { background:linear-gradient(180deg,#5ee89a,#1fae5f); }
+  .ctask.locked { opacity:.55; }
+  .setclock { width:min(70vw,250px); height:auto; touch-action:none; cursor:grab; filter:drop-shadow(0 8px 16px rgba(0,0,0,.4)); }
+  .clkbtns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .clkbtns button { padding:10px 6px; font-size:.95rem; }
+  .wintitle { font-size:3rem; animation:titleIn 1s cubic-bezier(.2,1.4,.4,1) both, shine 3s linear infinite; background:linear-gradient(90deg,#ffd43b,#fff,#ff9aae,#7fd6ff,#ffd43b); background-size:300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 6px 24px rgba(255,212,59,.5)); }
+  @keyframes titleIn { from { transform:scale(.2) rotate(-8deg); opacity:0; } to { transform:none; opacity:1; } }
+  @keyframes shine { to { background-position:300% 0; } }
+  .winvideo { width:100%; max-width:440px; border-radius:24px; border:3px solid rgba(255,212,59,.6); box-shadow:0 0 60px rgba(255,212,59,.35), var(--shadow); display:block; margin:6px auto; background:#08050f; }
+  #fwCv { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:-1; }
 </style>
 </head>
 <body>
@@ -341,11 +359,17 @@
   <div class="notegrid" id="noteGrid"></div>
   <div class="status" id="noteMsg"></div>
   <div class="card" id="codeBox" style="display:none">
-    <div>All notes are turned over! The code is</div>
-    <div class="score" id="codeText"></div>
-    <input id="codeIn" inputmode="numeric" maxlength="12" placeholder="Type the code" style="text-align:center;letter-spacing:4px">
-    <button class="b1" id="codeGo" style="width:100%;padding:14px;background:var(--ok)">Open the treasure!</button>
-    <div class="status" id="codeMsg"></div>
+    <div id="codeReader" style="display:none">
+      <div>All notes are turned over! Read this code to Team 2:</div>
+      <div class="score" id="codeText"></div>
+      <p>Team 2 has to type it in to open the door.</p>
+    </div>
+    <div id="codeKeypad" style="display:none">
+      <div>All notes are turned over! Ask Team 1 for the code and type it here:</div>
+      <input id="codeIn" inputmode="numeric" maxlength="12" placeholder="Type the code" style="text-align:center;letter-spacing:4px">
+      <button class="b1" id="codeGo" style="width:100%;padding:14px;background:var(--ok)">Open the door</button>
+      <div class="status" id="codeMsg"></div>
+    </div>
   </div>
   <button id="notesBack" style="margin-top:12px;padding:12px 20px;font-size:1rem;background:#3a3358">Back outside</button>
 </section>
@@ -357,12 +381,56 @@
   <button id="npClose" style="margin-top:8px;padding:10px 18px;font-size:1rem;background:#3a3358">Close</button>
 </div></div>
 
-<section id="win" class="screen" style="width:min(96vw,520px)">
+<section id="clockroom" class="screen" style="width:min(96vw,540px)">
+  <h1>The clock room</h1>
+  <p>The code is hidden in 4 clocks. Every clock you set right gives you one digit.</p>
+  <div class="codebar" id="codeBar"></div>
+  <p id="clockHelp"></p>
+  <div class="clockgrid" id="clockTasks"></div>
+  <div class="status" id="clockMsg"></div>
+</section>
+<div class="modal" id="clockPuzzle"><div class="box card">
+  <h1 id="clkTitle" style="font-size:1.7rem"></h1>
+  <div class="sentence" id="clkTask" style="font-size:1.35rem;margin:6px 0 10px"></div>
+  <svg id="clkSvg" class="setclock" viewBox="0 0 200 200">
+    <circle cx="100" cy="100" r="96" fill="#201b33" stroke="#a79fc4" stroke-width="4"/>
+    <g id="clkNums"></g>
+    <line id="hHand" x1="100" y1="100" x2="100" y2="50" stroke="#ff5d73" stroke-width="7" stroke-linecap="round"/>
+    <line id="mHand" x1="100" y1="100" x2="100" y2="25" stroke="#4dabf7" stroke-width="5" stroke-linecap="round"/>
+    <circle id="hKnob" r="9" fill="#ff5d73" stroke="#fff" stroke-width="2"/>
+    <circle id="mKnob" r="8" fill="#4dabf7" stroke="#fff" stroke-width="2"/>
+    <circle cx="100" cy="100" r="5" fill="#f8f5ff"/>
+  </svg>
+  <p style="margin:4px 0;font-size:.9rem">Drag the <b style="color:#ff8fa3">short hand</b> (hours) or the <b style="color:#7fd6ff">long hand</b> (minutes), or use the buttons.</p>
+  <div class="clkbtns">
+    <button id="hMinus">&minus; hour</button><button id="hPlus">+ hour</button>
+    <button id="mMinus">&minus; 5 min</button><button id="mPlus">+ 5 min</button>
+  </div>
+  <button class="b1" id="clkCheck" style="width:100%;margin-top:10px;padding:14px;background:var(--ok)">Check</button>
+  <div class="status" id="clkMsg"></div>
+  <button id="clkClose" style="margin-top:6px;padding:10px 18px;font-size:1rem;background:#3a3358">Close</button>
+</div></div>
+
+<section id="finalLock" class="screen" style="width:min(96vw,520px)">
+  <h1>The final lock</h1>
+  <p>You found the whole clock code:</p>
+  <div class="codebar" id="codeBar2"></div>
+  <div class="card">
+    <p style="margin-top:0;color:var(--text)">Now take this code <b>+</b> the secret code you were given. That gives you the answer. Type the answer to open the lock!</p>
+    <input id="finalIn" placeholder="Type the answer" autocomplete="off" style="text-align:center;font-size:1.4rem">
+    <button class="b1" id="finalGo" style="width:100%;padding:14px;background:var(--ok)">Unlock</button>
+    <div class="status" id="finalMsg"></div>
+    <div id="finalHint" style="display:none;font-size:.85rem;color:#ffb347"></div>
+  </div>
+</section>
+
+<section id="win" class="screen" style="width:min(96vw,560px)">
+  <canvas id="fwCv"></canvas>
   <div class="confetti" id="confetti"></div>
-  <h1>You escaped!</h1>
-  <div class="score">&#127942;</div>
-  <p id="winNames" style="font-size:1.4rem;color:var(--text)"></p>
-  <p>You found B-O-A-T, sailed away from the shark and cracked the secret code together. Amazing teamwork!</p>
+  <h1 class="wintitle">YOU ESCAPED!</h1>
+  <video id="winVideo" class="winvideo" src="media/victory.mp4" poster="media/victory-poster.png" muted playsinline loop></video>
+  <p id="winNames" style="font-size:1.5rem;color:var(--text);margin:14px 0 4px"></p>
+  <p>You found B-O-A-T, escaped the shark, cracked the notes, set the clocks and opened the final lock. Amazing teamwork!</p>
   <button class="b1" id="playAgain" style="width:100%;padding:16px;background:var(--ok)">Play again</button>
 </section>
 
@@ -1054,6 +1122,7 @@ $('useKey').onclick = () => {
 };
 
 </script>
-<script src="world.js?v=20261110b"></script>
+<script src="config.js?v=1"></script>
+<script src="world.js?v=20261110c"></script>
 </body>
 </html>

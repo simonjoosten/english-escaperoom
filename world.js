@@ -669,20 +669,24 @@ function openNotes() {
 }
 function renderNotes() {
   $('codeMsg').textContent = ''; $('noteMsg').textContent = '';
-  $('notesHelp').textContent = testMode ? 'Test mode: you can solve all the notes.' : `You are Team ${me}: solve the notes with your colour. Your partner solves the others. Turn them ALL over to find the code!`;
+  $('notesHelp').textContent = testMode ? 'Test mode: you can solve all the notes.' : `You are Team ${me}: solve the notes with your colour. Your partner solves the others. Turn them ALL over: Team 1 then reads the code, and Team 2 types it to open the door!`;
   const grid = $('noteGrid'); grid.innerHTML = '';
   NOTES.forEach((n, i) => {
     const d = document.createElement('div');
     const mine = testMode || n.team === me;
     d.className = `note t${n.team}${noteDone[i] ? ' flip' : ''}${!mine && !noteDone[i] ? ' locked' : ''}`;
     d.style.setProperty('--rot', ((i * 37) % 7 - 3) + 'deg');
-    d.innerHTML = `<div class="in"><div class="f"><div style="font-size:1.4rem">&#9993;&#65039; Note ${i + 1}</div><small style="color:#7a5a20">${mine ? 'tap to solve' : 'Team ' + n.team}</small></div><div class="b"><div>${n.digit}</div><small style="font-size:.85rem;color:#6b5aa8;font-weight:600">${n.word.toLowerCase()}</small></div></div>`;
+    d.innerHTML = `<div class="in"><div class="f"><div style="font-size:1.4rem">&#9993;&#65039; Note ${i + 1}</div><small style="color:#7a5a20">${mine ? 'tap to solve' : 'Team ' + n.team}</small></div><div class="b"><div>${testMode || me === 1 ? n.digit : '?'}</div><small style="font-size:.85rem;color:#6b5aa8;font-weight:600">${n.word.toLowerCase()}</small></div></div>`;
     d.onclick = () => { if (noteDone[i]) return; if (!mine) { $('noteMsg').textContent = `That note is for Team ${n.team}.`; return; } openNotePuzzle(i); };
     grid.appendChild(d);
   });
   const all = NOTES.every((_, i) => noteDone[i]);
   $('codeBox').style.display = all ? 'block' : 'none';
-  if (all) $('codeText').textContent = CODE.split('').join(' ');
+  if (all) {
+    $('codeText').textContent = CODE.split('').join(' ');
+    $('codeReader').style.display = testMode || me === 1 ? 'block' : 'none';     // Team 1 reads the code...
+    $('codeKeypad').style.display = testMode || me === 2 ? 'block' : 'none';     // ...Team 2 types it
+  }
 }
 function openNotePuzzle(i) {
   noteOpen = i; const n = NOTES[i];
@@ -701,18 +705,147 @@ function solveNote(i, mineSolved) {
 $('npClose').onclick = () => { $('notePuzzle').style.display = 'none'; };
 $('notesBack').onclick = () => { setScene('island', 7, 5); show('outside'); startLoop(); };
 $('codeGo').onclick = () => {
-  if ($('codeIn').value.replace(/\D/g, '') === CODE) { send({ win: true }); showWin(); }
-  else $('codeMsg').textContent = 'That is not the right code. Check the notes!';
+  if ($('codeIn').value.replace(/\D/g, '') === CODE) startLastLevel(false);
+  else $('codeMsg').textContent = 'That is not the right code. Ask Team 1 to read it again!';
+};
+
+// =====================================================================
+//  LAST LEVEL: the clock room (2 clocks per team) and the final lock
+// =====================================================================
+const CFG = Object.assign({ clockDigits: [5, 1, 8, 2], secretCode: '0000', combine: 'concat', finalAnswer: '' }, window.ESCAPE_CONFIG || {});
+const CLOCK_OWNER = [1, 2, 1, 2];
+let clockDone = [false, false, false, false], clockTimes = [], lastLevel = false, clockCur = -1, finalShown = false;
+const clk = { h: 12, m: 0 };
+const clockCode = () => CFG.clockDigits.join('');
+function finalAnswerText() {
+  if (CFG.finalAnswer) return String(CFG.finalAnswer);
+  if (CFG.combine === 'sum') return String(Number(clockCode()) + Number(CFG.secretCode));
+  return clockCode() + CFG.secretCode;
+}
+const norm = t => String(t).toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function startLastLevel(fromPartner) {
+  lastLevel = true;
+  if (!clockTimes.length) clockTimes = CLOCK_OWNER.map(() => randTime());
+  if (!fromPartner) send({ lastLevel: true });
+  $('notePuzzle').style.display = 'none';
+  show('clockroom'); renderClockRoom();
+}
+function renderCodeBar(el) { el.innerHTML = CFG.clockDigits.map((d, i) => `<span class="${clockDone[i] ? 'got' : ''}">${clockDone[i] ? d : '?'}</span>`).join(''); }
+function renderClockRoom() {
+  renderCodeBar($('codeBar'));
+  $('clockHelp').textContent = testMode ? 'Test mode: you can do all the clocks.' : `You are Team ${me}: do the clocks with your colour (2 each). Your partner does the other two.`;
+  const box = $('clockTasks'); box.innerHTML = '';
+  CLOCK_OWNER.forEach((team, i) => {
+    const mine = testMode || team === me, b = document.createElement('button');
+    b.className = `ctask t${team}${clockDone[i] ? ' done' : ''}${!mine && !clockDone[i] ? ' locked' : ''}`;
+    b.innerHTML = clockDone[i] ? `<b>&#128368; Clock ${i + 1}</b><span>&#9989; digit ${CFG.clockDigits[i]}</span>` : `<b>&#128368; Clock ${i + 1}</b><span>${mine ? 'tap to solve' : 'Team ' + team}</span>`;
+    b.onclick = () => { if (clockDone[i]) return; if (!mine) { $('clockMsg').textContent = `That clock is for Team ${team}.`; return; } openClockPuzzle(i); };
+    box.appendChild(b);
+  });
+  $('clockMsg').textContent = '';
+}
+
+// the clock you can set
+const hp = a => [100 + 50 * Math.sin(a * Math.PI / 180), 100 - 50 * Math.cos(a * Math.PI / 180)];
+const mp = a => [100 + 75 * Math.sin(a * Math.PI / 180), 100 - 75 * Math.cos(a * Math.PI / 180)];
+function drawClk() {
+  const [hx, hy] = hp((clk.h % 12 + clk.m / 60) * 30), [mx, my] = mp(clk.m * 6);
+  $('hHand').setAttribute('x2', hx); $('hHand').setAttribute('y2', hy); $('hKnob').setAttribute('cx', hx); $('hKnob').setAttribute('cy', hy);
+  $('mHand').setAttribute('x2', mx); $('mHand').setAttribute('y2', my); $('mKnob').setAttribute('cx', mx); $('mKnob').setAttribute('cy', my);
+}
+(function buildClockFace() {
+  let t = '';
+  for (let i = 1; i <= 12; i++) { const a = i * 30 * Math.PI / 180; t += `<text x="${100 + 80 * Math.sin(a)}" y="${105 - 80 * Math.cos(a)}" text-anchor="middle" font-size="14" fill="#f8f5ff">${i}</text>`; }
+  $('clkNums').innerHTML = t;
+})();
+let clkDrag = null;
+const svgEl = $('clkSvg');
+function svgPoint(e) { const r = svgEl.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * 200, (e.clientY - r.top) / r.height * 200]; }
+function applyDrag(x, y) {
+  let a = Math.atan2(x - 100, -(y - 100)) * 180 / Math.PI; if (a < 0) a += 360;
+  if (clkDrag === 'm') clk.m = Math.round(a / 30) * 5 % 60;
+  else { const hh = (((Math.round((a - clk.m * .5) / 30)) % 12) + 12) % 12; clk.h = hh === 0 ? 12 : hh; }
+  drawClk();
+}
+svgEl.addEventListener('pointerdown', e => {
+  const [x, y] = svgPoint(e), r = Math.hypot(x - 100, y - 100);
+  clkDrag = r > 56 ? 'm' : 'h';                    // outer part = long hand, inner part = short hand
+  try { svgEl.setPointerCapture(e.pointerId); } catch (err) {}
+  applyDrag(x, y); e.preventDefault();
+});
+svgEl.addEventListener('pointermove', e => { if (clkDrag) { const [x, y] = svgPoint(e); applyDrag(x, y); } });
+['pointerup', 'pointercancel'].forEach(ev => svgEl.addEventListener(ev, () => { clkDrag = null; }));
+$('hPlus').onclick = () => { clk.h = clk.h % 12 + 1; drawClk(); };
+$('hMinus').onclick = () => { clk.h = (clk.h + 10) % 12 + 1; drawClk(); };
+$('mPlus').onclick = () => { clk.m = (clk.m + 5) % 60; drawClk(); };
+$('mMinus').onclick = () => { clk.m = (clk.m + 55) % 60; drawClk(); };
+
+function openClockPuzzle(i) {
+  clockCur = i; clk.h = 12; clk.m = 0; drawClk();
+  const t = clockTimes[i];
+  $('clkTitle').textContent = 'Clock ' + (i + 1);
+  $('clkTask').textContent = 'Set the clock to: ' + timePhrase(t.h, t.m);
+  $('clkMsg').textContent = '';
+  $('clockPuzzle').style.display = 'grid';
+}
+$('clkCheck').onclick = () => {
+  const t = clockTimes[clockCur];
+  if (clk.h === t.h && clk.m === t.m) { $('clockPuzzle').style.display = 'none'; solveClock(clockCur, true); }
+  else $('clkMsg').textContent = 'That is not the right time. Read the words again and check both hands!';
+};
+$('clkClose').onclick = () => { $('clockPuzzle').style.display = 'none'; };
+
+function solveClock(i, mine) {
+  if (clockDone[i]) return;
+  clockDone[i] = true; if (mine) send({ clockDone: i });
+  if ($('clockroom').classList.contains('active')) renderClockRoom();
+  if (clockDone.every(Boolean) && !finalShown) setTimeout(showFinalLock, 1400);
+}
+function showFinalLock() {
+  if (finalShown) return; finalShown = true;
+  $('clockPuzzle').style.display = 'none';
+  show('finalLock'); renderCodeBar($('codeBar2')); $('finalMsg').textContent = '';
+  const h = $('finalHint');
+  if (testMode) { h.style.display = 'block'; h.textContent = 'Test hint: the answer is "' + finalAnswerText() + '"'; } else h.style.display = 'none';
+}
+$('finalGo').onclick = () => {
+  if (norm($('finalIn').value) === norm(finalAnswerText())) { send({ win: true }); showWin(); }
+  else $('finalMsg').textContent = 'That is not the answer. Did you use the clock code AND the secret code?';
 };
 
 // =====================================================================
 //  WIN
 // =====================================================================
+let fw = null;
+function startFireworks() {
+  const cv = $('fwCv'), g = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight;
+  const parts = []; let last = 0, alive = true; fw = () => { alive = false; };
+  const burst = () => {
+    const x = Math.random() * cv.width, y = Math.random() * cv.height * .6, col = `hsl(${Math.floor(Math.random() * 360)},95%,62%)`, n = 46;
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, sp = 2 + Math.random() * 3.5; parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, col }); }
+  };
+  const loop = t => {
+    if (!alive || !$('win').classList.contains('active')) return;
+    if (t - last > 520) { last = t; burst(); }
+    g.fillStyle = 'rgba(10,6,30,.22)'; g.fillRect(0, 0, cv.width, cv.height);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i]; p.x += p.vx; p.y += p.vy; p.vy += .05; p.vx *= .99; p.life -= .012;
+      if (p.life <= 0) { parts.splice(i, 1); continue; }
+      g.globalAlpha = p.life; g.fillStyle = p.col; g.beginPath(); g.arc(p.x, p.y, 2.4, 0, 7); g.fill();
+    }
+    g.globalAlpha = 1; requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
 function showWin() {
   $('winNames').textContent = (names[1] || 'Team 1') + ' + ' + (names[2] || 'Team 2');
+  $('clockPuzzle').style.display = 'none'; $('notePuzzle').style.display = 'none';
   show('win');
+  const v = $('winVideo'); try { v.currentTime = 0; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}
+  if (fw) fw(); startFireworks();
   const box = $('confetti'); box.innerHTML = '';
-  for (let i = 0; i < 70; i++) { const c = document.createElement('i'); c.style.left = Math.random() * 100 + '%'; c.style.background = ['#ff5d73', '#ffd43b', '#38b6ff', '#3ddc84', '#9b7bff'][i % 5]; c.style.animationDelay = Math.random() * 2.5 + 's'; c.style.animationDuration = 2.5 + Math.random() * 2.5 + 's'; box.appendChild(c); }
+  for (let i = 0; i < 90; i++) { const c = document.createElement('i'); c.style.left = Math.random() * 100 + '%'; c.style.background = ['#ff5d73', '#ffd43b', '#38b6ff', '#3ddc84', '#9b7bff'][i % 5]; c.style.animationDelay = Math.random() * 2.5 + 's'; c.style.animationDuration = 2.5 + Math.random() * 2.5 + 's'; box.appendChild(c); }
 }
 $('playAgain').onclick = () => location.reload();
 
@@ -724,6 +857,8 @@ window.onNet = d => {
   if (d.npcDone && NPCS[d.npcDone]) { done[d.npcDone] = true; renderLetters(); if ($('outside').classList.contains('active')) toast(`Your partner found the letter "${NPCS[d.npcDone].letter}"!`); }
   if (d.noteDone !== undefined) solveNote(d.noteDone, false);
   if (d.win) showWin();
+  if (d.lastLevel) startLastLevel(true);
+  if (d.clockDone !== undefined) solveClock(d.clockDone, false);
   if (d.boatReady) { boatReady.other = true; maybeStart(); }
   if (d.boatStart) { boatReady.me = boatReady.other = false; if (!$('boat').classList.contains('active')) enterBoatSilent(); startBoat(d.boatStart.seed); }
   if (d.boat && boat) { Object.assign(boat, d.boat); }
@@ -733,6 +868,8 @@ function enterBoatSilent() { show('boat'); $('steerPad').style.display = isSteer
 window.onNetOpen = c => {
   Object.keys(done).forEach(k => c.send({ npcDone: k }));
   noteDone.forEach((v, i) => { if (v) c.send({ noteDone: i }); });
+  clockDone.forEach((v, i) => { if (v) c.send({ clockDone: i }); });
+  if (lastLevel) c.send({ lastLevel: true });
 };
 
 // ---------------------------------------------------------------- test mode: skip to the next level
@@ -750,16 +887,19 @@ window.skipLevel = function () {
     NOTES.forEach((_, i) => { noteDone[i] = true; }); openNotes(); return;                                                           // level 4: the notes
   }
   if (act === 'boat') { if (boat && boat.status !== 'win') { boat.dist = GOAL; boat.speed = 1; } return; }
-  if (act === 'notes') { NOTES.forEach((_, i) => { noteDone[i] = true; }); renderNotes(); if ($('codeBox').style.display === 'block') showWin(); return; }
+  if (act === 'notes') { NOTES.forEach((_, i) => { noteDone[i] = true; }); renderNotes(); startLastLevel(false); return; }
+  if (act === 'clockroom') { for (let i = 0; i < 4; i++) clockDone[i] = true; showFinalLock(); return; }
+  if (act === 'finalLock') { showWin(); return; }
 };
 $('skipLevel').onclick = () => window.skipLevel();
 setInterval(() => {
   const act = document.querySelector('.screen.active');
-  $('skipLevel').style.display = testMode && act && ['hub', 'safe', 'cross', 'wsearch', 'keyScene', 'doorScene', 'outside', 'boat', 'notes'].includes(act.id) ? 'block' : 'none';
+  $('skipLevel').style.display = testMode && act && ['hub', 'safe', 'cross', 'wsearch', 'keyScene', 'doorScene', 'outside', 'boat', 'notes', 'clockroom', 'finalLock'].includes(act.id) ? 'block' : 'none';
 }, 300);
 
 window.resetWorld = function () {
   done = {}; noteDone = []; started = false; cur = null; boat = null; dlg = null;
+  clockDone = [false, false, false, false]; clockTimes = []; lastLevel = false; finalShown = false;
   boatReady = { me: false, other: false };
   partner.seen = 0; partner.s = '';
   renderLetters();
