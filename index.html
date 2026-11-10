@@ -419,7 +419,7 @@ setInterval(netUpdate, 700);
 function watchIce(c) {
   let n = 0; const t = setInterval(() => {
     const pc = c.peerConnection; n++;
-    if (pc) { net.ice = pc.iceConnectionState; if (c.open) { clearInterval(t); } }
+    if (pc) { net.ice = pc.iceConnectionState; if (['checking', 'connected', 'completed'].includes(net.ice)) net.room = 'ok'; if (c.open) { clearInterval(t); } }
     if (n > 60 || (conn && conn.open)) clearInterval(t);
   }, 500);
 }
@@ -531,7 +531,7 @@ function tryConnect() {
   if (!peer || (conn && conn.open)) return;
   if (pendingConn && !pendingConn.open) { try { pendingConn.close(); } catch (e) {} }   // drop the half-open try before a new one
   const c = pendingConn = peer.connect(roomId(roomCode), { reliable: true });
-  net.room = 'ok'; net.ice = '';
+  net.ice = '';
   setupConn(c); watchIce(c);
   clearTimeout(retry); retry = setTimeout(tryConnect, 9000);
 }
