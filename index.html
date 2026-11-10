@@ -175,6 +175,7 @@
   .codeinput { text-align:center; font-size:2rem; letter-spacing:.35em; text-transform:uppercase; padding-left:.55em; }
   #linkBadge { position:fixed; top:10px; left:10px; z-index:30; padding:6px 12px; border-radius:99px; font-size:.85rem; background:rgba(15,10,36,.85); border:1px solid var(--stroke); box-shadow:var(--shadow); }
   #linkBadge.ok { border-color:rgba(61,220,132,.6); } #linkBadge.wait { border-color:rgba(255,212,59,.6); }
+  .netinfo { font-size:.9rem; color:var(--muted); background:var(--card); border:1px solid var(--stroke); border-radius:14px; padding:10px 14px; margin:12px 0; line-height:1.6; }
 </style>
 </head>
 <body>
@@ -189,6 +190,7 @@
 <section id="menu" class="screen">
   <h1>Choose your team</h1>
   <p>Team 1 makes a room code. Team 2 types that code to join. Team 1 goes first!</p>
+  <p style="font-size:.85rem">Tip: it works best when both players are on the same Wi-Fi.</p>
   <div class="btns">
     <button class="b1 teambtn" id="pick1"><span class="big">&#129418;</span>Team 1</button>
     <button class="b2 teambtn" id="pick2"><span class="big">&#128044;</span>Team 2</button>
@@ -201,6 +203,7 @@
 <section id="lobby" class="screen">
   <h1 id="lobbyTitle"></h1>
   <div class="status" id="lobbyStatus"></div>
+  <div class="netinfo" id="netInfo" style="display:none"></div>
   <div class="card" id="roomCard" style="display:none">
     <div>Your room code</div>
     <div class="roomcode" id="roomCode"></div>
@@ -391,6 +394,36 @@ const roomId = code => 'english-escaperoom-room-' + code;
 const invite = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
 let joinTries = 0;
 
+// Servers that help two devices find each other. If a network blocks direct links, add a TURN server here:
+// { urls: 'turn:YOUR_SERVER:443?transport=tcp', username: '...', credential: '...' }
+const ICE = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:global.stun.twilio.com:3478' },
+] };
+
+// "Connection check": shows the player where linking is stuck
+const net = { broker: 'wait', room: 'wait', ice: '', since: 0 };
+function netUpdate() {
+  const el = $('netInfo'); if (!el) return;
+  if (!me || testMode || (conn && conn.open)) { el.style.display = 'none'; return; }
+  const icon = v => v === 'ok' ? '\u2705' : (v === 'fail' ? '\u274C' : '\u23F3');
+  const ice = net.ice === 'connected' || net.ice === 'completed' ? 'ok' : (net.ice === 'failed' || net.ice === 'disconnected' ? 'fail' : 'wait');
+  let html = `${icon(net.broker)} Server &nbsp; ${me === 2 ? icon(net.room) + ' Room found &nbsp; ' : ''}${icon(ice)} Direct link${net.ice ? ' (' + net.ice + ')' : ''}`;
+  const waited = net.since ? (Date.now() - net.since) / 1000 : 0;
+  if (net.broker === 'fail') html += '<br>Cannot reach the connection server. Is the internet on? A school network can block it.';
+  else if (me === 2 && net.room === 'fail') html += '<br>Room not found. Check the code, and make sure Team 1 is on the room screen.';
+  else if (ice === 'fail' || (net.ice && waited > 14)) html += '<br>The two devices cannot link directly. This often happens on school Wi-Fi. Try: both on the same Wi-Fi, or a phone hotspot.';
+  el.innerHTML = html; el.style.display = 'block';
+}
+setInterval(netUpdate, 700);
+function watchIce(c) {
+  let n = 0; const t = setInterval(() => {
+    const pc = c.peerConnection; n++;
+    if (pc) { net.ice = pc.iceConnectionState; if (c.open) { clearInterval(t); } }
+    if (n > 60 || (conn && conn.open)) clearInterval(t);
+  }, 500);
+}
+
 // the little badge at the top left: are we linked with the partner?
 function setLink(state) {
   const el = $('linkBadge');
@@ -449,13 +482,15 @@ $('leave').onclick = leave;
 // ---- Team 1: make the room and wait
 function openHost() {
   dropPeer();
-  const p = peer = new Peer(roomId(roomCode));
+  const p = peer = new Peer(roomId(roomCode), { config: ICE });
+  net.broker = 'wait'; net.room = 'wait'; net.ice = ''; net.since = Date.now();
   p.on('error', err => {
     if (p._ignore) return;
     if (err.type === 'unavailable-id') { roomCode = makeCode(); retry = setTimeout(openHost, 200); }   // code taken: pick another
-    else { $('menuStatus').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(openHost, 2500); }
+    else { net.broker = 'fail'; $('menuStatus').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(openHost, 2500); }
   });
   p.on('open', () => {
+    net.broker = 'ok'; net.since = Date.now();
     show('lobby');
     $('joinCard').style.display = 'none';
     if (!(conn && conn.open)) {
@@ -464,7 +499,7 @@ function openHost() {
       setLink('wait');
     }
   });
-  p.on('connection', c => setupConn(c));
+  p.on('connection', c => { net.room = 'ok'; watchIce(c); setupConn(c); });
   p.on('disconnected', () => { if (!p._ignore) try { p.reconnect(); } catch (e) {} });
   p.on('close', () => { if (!p._ignore && me === 1) retry = setTimeout(openHost, 1500); });
 }
@@ -477,22 +512,28 @@ function joinRoom(code) {
   dropPeer();
   $('joinMsg').textContent = 'Connecting...';
   setLink('wait');
-  const p = peer = new Peer();
+  const p = peer = new Peer(undefined, { config: ICE });
+  net.broker = 'wait'; net.room = 'wait'; net.ice = ''; net.since = Date.now();
   p.on('error', err => {
     if (p._ignore) return;
     if (err.type === 'peer-unavailable') {
+      net.room = 'fail'; clearTimeout(retry); retry = setTimeout(tryConnect, 2000);
       joinTries++;
       if (joinTries >= 1 && !(conn && conn.open)) $('joinMsg').textContent = `Cannot find room ${roomCode} yet. Check the code, or wait until Team 1 has pressed their button.`;
-    } else { $('joinMsg').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(() => joinRoom(roomCode), 3000); }
+    } else { net.broker = 'fail'; $('joinMsg').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(() => joinRoom(roomCode), 3000); }
   });
-  p.on('open', () => tryConnect());
+  p.on('open', () => { net.broker = 'ok'; tryConnect(); });
   p.on('disconnected', () => { if (!p._ignore) try { p.reconnect(); } catch (e) {} });
   p.on('close', () => { if (!p._ignore && me === 2 && roomCode) retry = setTimeout(() => joinRoom(roomCode), 1500); });
 }
+let pendingConn = null;
 function tryConnect() {
   if (!peer || (conn && conn.open)) return;
-  setupConn(peer.connect(roomId(roomCode), { reliable: true }));
-  retry = setTimeout(tryConnect, 2500);
+  if (pendingConn && !pendingConn.open) { try { pendingConn.close(); } catch (e) {} }   // drop the half-open try before a new one
+  const c = pendingConn = peer.connect(roomId(roomCode), { reliable: true });
+  net.room = 'ok'; net.ice = '';
+  setupConn(c); watchIce(c);
+  clearTimeout(retry); retry = setTimeout(tryConnect, 9000);
 }
 $('joinBtn').onclick = () => joinRoom($('joinInput').value);
 $('joinInput').addEventListener('input', e => {
@@ -510,7 +551,7 @@ function setupConn(c) {
   if (conn && conn.open) { c.close(); return; }
   c.on('open', () => {
     if (conn && conn.open && conn !== c) { c.close(); return; }
-    conn = c; clearTimeout(retry);
+    conn = c; clearTimeout(retry); net.ice = 'connected'; net.broker = 'ok'; net.room = 'ok';
     $('roomCard').style.display = 'none'; $('joinCard').style.display = 'none';
     $('lobbyStatus').innerHTML = '<span class="ok">Linked!</span> Fill in your team name.';
     $('nameCard').style.display = 'block';
@@ -1013,6 +1054,6 @@ $('useKey').onclick = () => {
 };
 
 </script>
-<script src="world.js?v=20261110a"></script>
+<script src="world.js?v=20261110b"></script>
 </body>
 </html>
