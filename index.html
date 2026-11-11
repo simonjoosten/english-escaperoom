@@ -194,6 +194,13 @@
   @keyframes shine { to { background-position:300% 0; } }
   .winvideo { width:100%; max-width:440px; border-radius:24px; border:3px solid rgba(255,212,59,.6); box-shadow:0 0 60px rgba(255,212,59,.35), var(--shadow); display:block; margin:6px auto; background:#08050f; }
   #fwCv { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:-1; }
+  .signs { display:flex; gap:12px; justify-content:center; margin:8px 0 14px; }
+  .signs button { flex:none; width:68px; height:68px; padding:0; font-size:2rem; border-radius:50%; }
+  .signs button.sel { background:linear-gradient(180deg,#ffe066,#f0a500); color:#4a2c00; box-shadow:0 0 22px rgba(255,212,59,.7), 0 6px 0 rgba(0,0,0,.3); }
+  .slots { display:flex; gap:10px; justify-content:center; margin:8px 0 16px; }
+  .slots input { width:58px; height:68px; margin:0; padding:0; text-align:center; font-size:2rem; font-weight:700; border-radius:14px; }
+  .resultbar { margin:16px 0 4px; min-height:3.4rem; font-size:2.2rem; font-weight:700; color:var(--gold); text-shadow:0 0 18px rgba(255,212,59,.45); }
+  .resultbar small { display:block; font-size:.9rem; font-weight:400; color:var(--muted); text-shadow:none; }
 </style>
 </head>
 <body>
@@ -215,7 +222,7 @@
   </div>
   <div class="status" id="menuStatus"></div>
   <button id="testBtn" style="margin-top:12px;padding:14px 28px;font-size:1rem;background:#3a3358">Test</button>
-  <p style="font-size:.85rem">Test = play alone, no second player needed.</p>
+  <p id="testNote" style="font-size:.85rem">Test = play alone, no second player needed.</p>
 </section>
 
 <section id="lobby" class="screen">
@@ -413,15 +420,20 @@
 
 <section id="finalLock" class="screen" style="width:min(96vw,520px)">
   <h1>The final lock</h1>
-  <p>You found the whole clock code:</p>
+  <p style="margin-bottom:0">This is the code from the clocks:</p>
   <div class="codebar" id="codeBar2"></div>
-  <div class="card">
-    <p style="margin-top:0;color:var(--text)">Now take this code <b>+</b> the secret code you were given. That gives you the answer. Type the answer to open the lock!</p>
-    <input id="finalIn" placeholder="Type the answer" autocomplete="off" style="text-align:center;font-size:1.4rem">
-    <button class="b1" id="finalGo" style="width:100%;padding:14px;background:var(--ok)">Unlock</button>
-    <div class="status" id="finalMsg"></div>
-    <div id="finalHint" style="display:none;font-size:.85rem;color:#ffb347"></div>
+  <p style="margin:0">Choose a sign:</p>
+  <div class="signs" id="signs">
+    <button data-sign="+">+</button><button data-sign="-">&minus;</button><button data-sign="x">&times;</button>
   </div>
+  <p style="margin:0">Type the code you got offline:</p>
+  <div class="slots" id="slots">
+    <input inputmode="numeric" maxlength="1" autocomplete="off"><input inputmode="numeric" maxlength="1" autocomplete="off"><input inputmode="numeric" maxlength="1" autocomplete="off"><input inputmode="numeric" maxlength="1" autocomplete="off">
+  </div>
+  <button class="b1" id="finalGo" style="width:100%;padding:16px;background:var(--ok);font-size:1.5rem">= Calculate</button>
+  <div class="resultbar" id="finalResult"></div>
+  <div class="status" id="finalMsg"></div>
+  <div id="finalHint" style="display:none;font-size:.85rem;color:#ffb347"></div>
 </section>
 
 <section id="win" class="screen" style="width:min(96vw,560px)">
@@ -1122,7 +1134,7 @@ $('useKey').onclick = () => {
 };
 
 </script>
-<script src="config.js?v=1"></script>
-<script src="world.js?v=20261110c"></script>
+<script src="config.js?v=2"></script>
+<script src="world.js?v=20261111a"></script>
 </body>
 </html>

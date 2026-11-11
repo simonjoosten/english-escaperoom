@@ -3,17 +3,19 @@
 // ======================================================================
 window.ESCAPE_CONFIG = {
   // The 4 digits the players earn in the clock room (one digit per clock). They appear at the top.
-  clockDigits: [5, 1, 8, 2],
+  clockDigits: [2, 1, 3, 5],
 
-  // The SECRET CODE that you give the players. Put the real one here!
-  secretCode: '0000',
+  // The code the players get OFFLINE (from you). They type it in the 4 boxes of the final lock.
+  secretCode: '2468',
 
-  // How the final answer is made from the clock code and the secret code:
-  //   'concat' = the clock code, then the secret code   (5182 + 0000  ->  51820000)
-  //   'sum'    = the two numbers added together         (5182 + 0000  ->  5182)
-  combine: 'concat',
+  // The sign that makes the right sum: '+', '-' or 'x'.   2135 + 2468 = 4603
+  finalSign: '+',
 
-  // Or type the final answer yourself (letters or numbers). If this is not empty, the two settings above are ignored.
-  // Example: finalAnswer: 'GOLDEN KEY'
-  finalAnswer: '',
+  // A code that opens the final lock straight away, just for testing.
+  // !! Set this to '' (empty) before the real game !!
+  testCode: '1432',
+
+  // true  = the "Test" button and the "Skip level" button work.
+  // false = test mode is switched off (use this for the real game).
+  enableTestMode: true,
 };

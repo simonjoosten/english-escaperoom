@@ -712,17 +712,12 @@ $('codeGo').onclick = () => {
 // =====================================================================
 //  LAST LEVEL: the clock room (2 clocks per team) and the final lock
 // =====================================================================
-const CFG = Object.assign({ clockDigits: [5, 1, 8, 2], secretCode: '0000', combine: 'concat', finalAnswer: '' }, window.ESCAPE_CONFIG || {});
+const CFG = Object.assign({ clockDigits: [2, 1, 3, 5], secretCode: '2468', finalSign: '+', testCode: '', enableTestMode: true }, window.ESCAPE_CONFIG || {});
 const CLOCK_OWNER = [1, 2, 1, 2];
 let clockDone = [false, false, false, false], clockTimes = [], lastLevel = false, clockCur = -1, finalShown = false;
 const clk = { h: 12, m: 0 };
 const clockCode = () => CFG.clockDigits.join('');
-function finalAnswerText() {
-  if (CFG.finalAnswer) return String(CFG.finalAnswer);
-  if (CFG.combine === 'sum') return String(Number(clockCode()) + Number(CFG.secretCode));
-  return clockCode() + CFG.secretCode;
-}
-const norm = t => String(t).toUpperCase().replace(/[^A-Z0-9]/g, '');
+const SIGN_CHAR = { '+': '+', '-': '\u2212', 'x': '\u00D7' };
 
 function startLastLevel(fromPartner) {
   lastLevel = true;
@@ -802,21 +797,43 @@ function solveClock(i, mine) {
   if ($('clockroom').classList.contains('active')) renderClockRoom();
   if (clockDone.every(Boolean) && !finalShown) setTimeout(showFinalLock, 1400);
 }
+let sign = '';
+const slotInputs = [...document.querySelectorAll('#slots input')];
+function clearResult() { $('finalResult').innerHTML = ''; $('finalMsg').textContent = ''; }
 function showFinalLock() {
   if (finalShown) return; finalShown = true;
   $('clockPuzzle').style.display = 'none';
-  show('finalLock'); renderCodeBar($('codeBar2')); $('finalMsg').textContent = '';
+  show('finalLock'); renderCodeBar($('codeBar2')); clearResult();
+  sign = ''; document.querySelectorAll('#signs button').forEach(b => b.classList.remove('sel'));
+  slotInputs.forEach(i => { i.value = ''; });
   const h = $('finalHint');
-  if (testMode) { h.style.display = 'block'; h.textContent = 'Test hint: the answer is "' + finalAnswerText() + '"'; } else h.style.display = 'none';
+  if (testMode) { h.style.display = 'block'; h.textContent = `Test hint: ${clockCode()} ${SIGN_CHAR[CFG.finalSign]} ${CFG.secretCode} = ${calc(Number(clockCode()), Number(CFG.secretCode), CFG.finalSign)}` + (CFG.testCode ? `   (test code: ${CFG.testCode})` : ''); }
+  else h.style.display = 'none';
 }
+const calc = (a, b, s) => s === '-' ? a - b : s === 'x' ? a * b : a + b;
+document.querySelectorAll('#signs button').forEach(b => { b.onclick = () => {
+  sign = b.dataset.sign; document.querySelectorAll('#signs button').forEach(x => x.classList.toggle('sel', x === b)); clearResult();
+}; });
+slotInputs.forEach((inp, i) => {
+  inp.addEventListener('input', () => { inp.value = inp.value.replace(/\D/g, '').slice(-1); if (inp.value && slotInputs[i + 1]) slotInputs[i + 1].focus(); clearResult(); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Backspace' && !inp.value && slotInputs[i - 1]) slotInputs[i - 1].focus(); if (e.key === 'Enter') $('finalGo').click(); });
+  inp.addEventListener('focus', () => inp.select());
+});
 $('finalGo').onclick = () => {
-  if (norm($('finalIn').value) === norm(finalAnswerText())) { send({ win: true }); showWin(); }
-  else $('finalMsg').textContent = 'That is not the answer. Did you use the clock code AND the secret code?';
+  const typed = slotInputs.map(i => i.value).join('');
+  if (typed.length < 4) { $('finalMsg').textContent = 'Type all 4 digits of the code first.'; return; }
+  const testWin = CFG.testCode && typed === String(CFG.testCode);
+  if (!sign && !testWin) { $('finalMsg').textContent = 'Choose a sign first: + − or ×'; return; }
+  const a = Number(clockCode()), b = Number(typed), s = sign || '+', r = calc(a, b, s);
+  $('finalResult').innerHTML = `<small>${a} ${SIGN_CHAR[s]} ${b} =</small>${r}`;        // the answer appears under the code
+  const ok = testWin || (typed === String(CFG.secretCode) && s === CFG.finalSign);
+  if (ok) {
+    $('finalMsg').innerHTML = '<span class="ok">Everything is right! The lock opens...</span>';
+    $('finalGo').disabled = true;
+    setTimeout(() => { $('finalGo').disabled = false; send({ win: true }); showWin(); }, 1800);
+  } else $('finalMsg').textContent = 'That does not open the lock. Try another sign, or check the digits.';
 };
 
-// =====================================================================
-//  WIN
-// =====================================================================
 let fw = null;
 function startFireworks() {
   const cv = $('fwCv'), g = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight;
@@ -904,6 +921,7 @@ window.resetWorld = function () {
   partner.seen = 0; partner.s = '';
   renderLetters();
 };
+if (CFG.enableTestMode === false) { ['testBtn', 'testNote'].forEach(id => { const e = $(id); if (e) e.style.display = 'none'; }); }
 renderLetters();
-window.__dbg = { player, partner, keys, NPCS, scenes, setScene: (...a) => setScene(...a), get cur() { return cur; }, get done() { return done; }, get boat() { return boat; }, interact, enterBoat, startBoat, openNotes, noteDone: () => noteDone };
+if (CFG.enableTestMode !== false) window.__dbg = { player, partner, keys, NPCS, scenes, setScene: (...a) => setScene(...a), get cur() { return cur; }, get done() { return done; }, get boat() { return boat; }, interact, enterBoat, startBoat, openNotes, noteDone: () => noteDone };
 })();
