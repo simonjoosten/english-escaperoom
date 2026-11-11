@@ -201,6 +201,11 @@
   .slots input { width:58px; height:68px; margin:0; padding:0; text-align:center; font-size:2rem; font-weight:700; border-radius:14px; }
   .resultbar { margin:16px 0 4px; min-height:3.4rem; font-size:2.2rem; font-weight:700; color:var(--gold); text-shadow:0 0 18px rgba(255,212,59,.45); }
   .resultbar small { display:block; font-size:.9rem; font-weight:400; color:var(--muted); text-shadow:none; }
+  .h2 { margin:22px 0 8px; font-size:1.3rem; color:var(--text); }
+  .grouplist { display:flex; flex-direction:column; gap:10px; min-height:20px; }
+  .grouplist button.group { display:flex; justify-content:space-between; align-items:center; text-align:left; padding:16px 18px; font-size:1.15rem; background:linear-gradient(180deg,#5cc6ff,#1c8ad6); }
+  .grouplist .joinlabel { background:rgba(255,255,255,.25); padding:6px 14px; border-radius:99px; font-size:.95rem; }
+  .nogroups { color:var(--muted); padding:14px; border:2px dashed var(--stroke); border-radius:16px; }
 </style>
 </head>
 <body>
@@ -213,14 +218,18 @@
 </section>
 
 <section id="menu" class="screen">
-  <h1>Choose your team</h1>
-  <p>Team 1 makes a room code. Team 2 types that code to join. Team 1 goes first!</p>
-  <p style="font-size:.85rem">Tip: it works best when both players are on the same Wi-Fi.</p>
-  <div class="btns">
-    <button class="b1 teambtn" id="pick1"><span class="big">&#129418;</span>Team 1</button>
-    <button class="b2 teambtn" id="pick2"><span class="big">&#128044;</span>Team 2</button>
+  <h1>Play together</h1>
+  <p>One player makes a group, the other player joins it. The one who makes the group is <b>Team 1</b>.</p>
+  <div class="card">
+    <input id="groupName" maxlength="20" placeholder="Group name, for example: Fast Foxes" autocomplete="off">
+    <button class="b1" id="makeGroup" style="width:100%;padding:18px;font-size:1.3rem">&#10133; Make a group</button>
   </div>
+  <h2 class="h2">Open groups</h2>
+  <div class="grouplist" id="groupList"></div>
+  <div class="status" id="groupStatus"></div>
   <div class="status" id="menuStatus"></div>
+  <button class="b2" id="soloBtn" style="width:100%;padding:16px;font-size:1.2rem;margin-top:14px">&#127918; Play alone</button>
+  <p style="font-size:.85rem;margin:6px 0 0">No partner? Play the whole game alone. You do the tasks of both teams.</p>
   <button id="testBtn" style="margin-top:12px;padding:14px 28px;font-size:1rem;background:#3a3358">Test</button>
   <p id="testNote" style="font-size:.85rem">Test = play alone, no second player needed.</p>
 </section>
@@ -229,19 +238,6 @@
   <h1 id="lobbyTitle"></h1>
   <div class="status" id="lobbyStatus"></div>
   <div class="netinfo" id="netInfo" style="display:none"></div>
-  <div class="card" id="roomCard" style="display:none">
-    <div>Your room code</div>
-    <div class="roomcode" id="roomCode"></div>
-    <p style="margin:6px 0 12px">Tell this code to Team 2, or send them a link.</p>
-    <button id="copyLink" style="width:100%;padding:14px">Copy invite link</button>
-    <div class="status" id="copyMsg" style="font-size:.9rem;word-break:break-all"></div>
-  </div>
-  <div class="card" id="joinCard" style="display:none">
-    <label for="joinInput">Type the room code from Team 1</label>
-    <input id="joinInput" class="codeinput" maxlength="4" placeholder="ABCD" autocomplete="off" autocapitalize="characters" spellcheck="false">
-    <button class="b2" id="joinBtn" style="width:100%;padding:14px">Join</button>
-    <div class="status" id="joinMsg"></div>
-  </div>
   <div class="card" id="nameCard" style="display:none">
     <label for="nameInput">Fill in your team name</label>
     <input id="nameInput" maxlength="24" placeholder="Team name" autocomplete="off">
@@ -450,7 +446,7 @@
 
 <div id="linkBadge" style="display:none"></div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const show = id => { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); $(id).classList.add('active'); };
@@ -460,204 +456,219 @@ let pct = 0;
 const timer = setInterval(() => {
   pct = Math.min(100, pct + 4 + Math.random() * 8);
   $('fill').style.width = pct + '%';
-  if (pct >= 100) { clearInterval(timer); setTimeout(() => { show('menu'); if (invite) start(2); }, 300); }
+  if (pct >= 100) { clearInterval(timer); setTimeout(() => { show('menu'); listStart(); }, 300); }
 }, 120);
 
-// Team selection + linking (room code system)
-// Team 1 makes a room with a 4-letter code. Team 2 types that code (or opens the invite link) to join.
-let me, other, peer, conn, retry, roomCode = '';
+// Pairing with GROUPS. Messages go through a public MQTT server (no direct link between the two devices is needed).
+// Team 1 makes a group. Team 2 clicks that group in the list on the main screen.
+let me, other, conn = null, roomCode = '', groupName = '', isHost = false;
 const names = { 1: '', 2: '' };
 const scores = { 1: null, 2: null };
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';           // no I or O, they look like 1 and 0
-const makeCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
-const roomId = code => 'english-escaperoom-room-' + code;
-const invite = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-let joinTries = 0;
+const BROKERS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081', 'wss://broker.emqx.io:8084/mqtt'];
+const PFX = 'english-escaperoom-v1/';
+const myId = 'p' + Math.random().toString(36).slice(2, 10);
+const net = { server: 'wait', partner: 'wait', host: '' };
+let listClient = null, listRetry = 0, gameClient = null, groups = {}, partnerCid = null, partnerOn = false;
 
-// Servers that help two devices find each other. If a network blocks direct links, add a TURN server here:
-// { urls: 'turn:YOUR_SERVER:443?transport=tcp', username: '...', credential: '...' }
-const ICE = { iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:global.stun.twilio.com:3478' },
-] };
-
-// "Connection check": shows the player where linking is stuck
-const net = { broker: 'wait', room: 'wait', ice: '', since: 0 };
 function netUpdate() {
   const el = $('netInfo'); if (!el) return;
   if (!me || testMode || (conn && conn.open)) { el.style.display = 'none'; return; }
-  const icon = v => v === 'ok' ? '\u2705' : (v === 'fail' ? '\u274C' : '\u23F3');
-  const ice = net.ice === 'connected' || net.ice === 'completed' ? 'ok' : (net.ice === 'failed' || net.ice === 'disconnected' ? 'fail' : 'wait');
-  let html = `${icon(net.broker)} Server &nbsp; ${me === 2 ? icon(net.room) + ' Room found &nbsp; ' : ''}${icon(ice)} Direct link${net.ice ? ' (' + net.ice + ')' : ''}`;
-  const waited = net.since ? (Date.now() - net.since) / 1000 : 0;
-  if (net.broker === 'fail') html += '<br>Cannot reach the connection server. Is the internet on? A school network can block it.';
-  else if (me === 2 && net.room === 'fail') html += '<br>Room not found. Check the code, and make sure Team 1 is on the room screen.';
-  else if (ice === 'fail' || (net.ice && waited > 14)) html += '<br>The two devices cannot link directly. This often happens on school Wi-Fi. Try: both on the same Wi-Fi, or a phone hotspot.';
+  const icon = v => v === 'ok' ? '✅' : (v === 'fail' ? '❌' : '⏳');
+  let html = `${icon(net.server)} Game server${net.host ? ' (' + net.host + ')' : ''} &nbsp; ${icon(net.partner)} Partner`;
+  if (net.server === 'fail') html += '<br>Cannot reach the game server. Is the internet on? A school network can block it.';
   el.innerHTML = html; el.style.display = 'block';
 }
 setInterval(netUpdate, 700);
-function watchIce(c) {
-  let n = 0; const t = setInterval(() => {
-    const pc = c.peerConnection; n++;
-    if (pc) { net.ice = pc.iceConnectionState; if (['checking', 'connected', 'completed'].includes(net.ice)) net.room = 'ok'; if (c.open) { clearInterval(t); } }
-    if (n > 60 || (conn && conn.open)) clearInterval(t);
-  }, 500);
-}
 
 // the little badge at the top left: are we linked with the partner?
 function setLink(state) {
   const el = $('linkBadge');
   if (!me || testMode || !state) { el.style.display = 'none'; return; }
-  el.style.display = 'block';
   const who = names[other] || `Team ${other}`;
-  el.className = state;
-  el.textContent = state === 'ok' ? `\u{1F7E2} Linked with ${who}` : `\u{1F7E1} ${roomCode && me === 1 ? 'Room ' + roomCode + ': ' : ''}waiting for ${who}...`;
+  el.style.display = 'block'; el.className = state;
+  el.textContent = state === 'ok' ? `\u{1F7E2} Linked with ${who}` : `\u{1F7E1} ${groupName ? groupName + ': ' : ''}waiting for ${who}...`;
 }
 
-$('pick1').onclick = () => start(1);
-$('pick2').onclick = () => start(2);
+// connect to the first server that answers
+function mqttConnect(opts) {
+  return new Promise((resolve, reject) => {
+    if (typeof mqtt === 'undefined') return reject(new Error('library'));
+    let i = 0;
+    const tryNext = () => {
+      if (i >= BROKERS.length) return reject(new Error('no server'));
+      const url = BROKERS[i++];
+      const c = mqtt.connect(url, Object.assign({ clientId: 'ee_' + myId + '_' + Math.random().toString(16).slice(2, 6), connectTimeout: 6000, reconnectPeriod: 2000, keepalive: 20, clean: true }, opts));
+      let settled = false;
+      const to = setTimeout(() => { if (!settled) { settled = true; try { c.end(true); } catch (e) {} tryNext(); } }, 7500);
+      c.once('connect', () => { if (settled) return; settled = true; clearTimeout(to); c.brokerHost = url.replace(/^wss:\/\//, '').split(/[:/]/)[0]; resolve(c); });
+    };
+    tryNext();
+  });
+}
 
-function start(team) {
-  me = team; other = team === 1 ? 2 : 1;
-  $('pick1').disabled = $('pick2').disabled = true;
-  $('menuStatus').textContent = 'Connecting...';
-  if (typeof Peer === 'undefined') { $('menuStatus').textContent = 'Could not load the connection library. Check your internet.'; $('pick1').disabled = $('pick2').disabled = false; me = other = null; return; }
-  $('lobbyTitle').textContent = `You are Team ${me}`;
-  if (me === 1) { roomCode = makeCode(); openHost(); }
-  else {
-    show('lobby');
-    $('roomCard').style.display = 'none'; $('joinCard').style.display = 'block';
-    $('lobbyStatus').textContent = 'Ask Team 1 for the room code.';
-    $('joinInput').value = invite; $('joinMsg').textContent = '';
-    if (invite.length === 4) joinRoom(invite); else $('joinInput').focus();
+// ---- main screen: the list of open groups
+async function listStart() {
+  listStop(); groups = {}; renderGroups();
+  $('groupStatus').textContent = 'Looking for groups...';
+  try {
+    const c = listClient = await mqttConnect({});
+    const sub = () => c.subscribe(PFX + 'groups/+');
+    c.on('connect', sub); sub();
+    c.on('message', (topic, buf) => {
+      const gid = topic.split('/').pop(), txt = buf.toString();
+      if (!txt) delete groups[gid]; else { try { groups[gid] = JSON.parse(txt); } catch (e) {} }
+      renderGroups();
+    });
+    $('groupStatus').textContent = '';
+    renderGroups();
+  } catch (e) {
+    if (listClient === null && !me) { $('groupStatus').textContent = 'Cannot reach the game server. Is the internet on? A school network can block it. Trying again...'; listRetry = setTimeout(listStart, 5000); }
   }
 }
-window.addEventListener('beforeunload', () => peer && peer.destroy());
-
-function dropPeer() {
-  clearTimeout(retry);
-  if (peer) { peer._ignore = true; peer.destroy(); }
-  peer = null;
+function listStop() { clearTimeout(listRetry); if (listClient) { try { listClient.end(true); } catch (e) {} listClient = null; } }
+function renderGroups() {
+  const box = $('groupList'); if (!box) return;
+  const open = Object.entries(groups).filter(([, g]) => g && !g.full);
+  box.innerHTML = '';
+  if (!open.length && listClient && !$('groupStatus').textContent) { box.innerHTML = '<div class="nogroups">No groups yet. Make one, or ask a friend to make one.</div>'; return; }
+  open.forEach(([gid, g]) => {
+    const b = document.createElement('button'); b.className = 'group';
+    b.innerHTML = `<span>&#128101; ${String(g.name || 'Group').replace(/</g, '&lt;')}</span><span class="joinlabel">Join &#9654;</span>`;
+    b.onclick = () => joinGroup(gid, g.name);
+    box.appendChild(b);
+  });
 }
 
+// ---- both players: go to the lobby and set things up
+function toLobby(team, status) {
+  me = team; other = team === 1 ? 2 : 1;
+  conn = { open: false, send: o => { if (gameClient && roomCode) gameClient.publish(PFX + 'g/' + roomCode + '/d' + me, JSON.stringify(o)); }, close() {} };
+  partnerCid = null; partnerOn = false;
+  net.server = 'wait'; net.partner = 'wait'; net.host = '';
+  $('lobbyTitle').textContent = `You are Team ${me}`;
+  $('lobbyStatus').textContent = status;
+  show('lobby'); setLink('wait');
+}
+function failToMenu(msg) {
+  const m = msg; leave(); $('menuStatus').textContent = m;
+}
+
+// ---- Team 1: make a group
+$('makeGroup').onclick = async () => {
+  const fun = ['Fast Foxes', 'Blue Dolphins', 'Red Pandas', 'Wise Owls', 'Super Sharks', 'Happy Hawks', 'Cool Cats', 'Brave Bears'];
+  groupName = ($('groupName').value.trim() || fun[Math.floor(Math.random() * fun.length)]).slice(0, 20);
+  roomCode = 'g' + Math.random().toString(36).slice(2, 10); isHost = true;
+  listStop(); $('menuStatus').textContent = '';
+  toLobby(1, 'Making your group...');
+  const base = PFX + 'g/' + roomCode + '/', gtopic = PFX + 'groups/' + roomCode;
+  try {
+    const c = gameClient = await mqttConnect({ will: { topic: gtopic, payload: '', retain: true, qos: 0 } });
+    net.server = 'ok'; net.host = c.brokerHost;
+    const announce = () => c.publish(gtopic, JSON.stringify({ name: groupName, full: !!partnerCid && partnerOn }), { retain: true });
+    const setup = () => { c.subscribe([base + 'ctl', base + 'd2', base + 'p2']); announce(); };
+    c.on('connect', setup); setup();
+    $('lobbyStatus').textContent = `Your group "${groupName}" is open. Waiting for a partner to join...`;
+    c.on('message', (topic, buf) => {
+      const txt = buf.toString();
+      if (topic === base + 'ctl') {
+        let m; try { m = JSON.parse(txt); } catch (e) { return; }
+        if (m.type !== 'join') return;
+        if (!partnerCid || partnerCid === m.cid || !partnerOn) { partnerCid = m.cid; c.publish(base + 'ctl', JSON.stringify({ type: 'accept', cid: m.cid })); announce(); }
+        else c.publish(base + 'ctl', JSON.stringify({ type: 'busy', cid: m.cid }));
+      } else if (topic === base + 'p2') {
+        partnerOn = txt === 'on'; net.partner = partnerOn ? 'ok' : 'wait';
+        if (partnerOn && partnerCid) linkUp(); else linkDown();
+        announce();
+      } else if (topic === base + 'd2') { try { handleData(JSON.parse(txt)); } catch (e) {} }
+    });
+  } catch (e) { net.server = 'fail'; failToMenu('Cannot reach the game server. Is the internet on? A school network can block it.'); }
+};
+
+// ---- Team 2: join a group from the list
+async function joinGroup(gid, name) {
+  groupName = name || 'Group'; roomCode = gid; isHost = false;
+  listStop(); $('menuStatus').textContent = '';
+  toLobby(2, `Joining "${groupName}"...`);
+  const base = PFX + 'g/' + roomCode + '/', gtopic = PFX + 'groups/' + roomCode;
+  let accepted = false, hostOn = false, joinTimer = 0, tries = 0;
+  try {
+    const c = gameClient = await mqttConnect({ will: { topic: base + 'p2', payload: 'off', retain: true, qos: 0 } });
+    net.server = 'ok'; net.host = c.brokerHost;
+    const join = () => { tries++; c.publish(base + 'ctl', JSON.stringify({ type: 'join', cid: myId })); };
+    const check = () => { if (accepted && hostOn) { net.partner = 'ok'; linkUp(); } };
+    const setup = () => { c.subscribe([base + 'ctl', base + 'd1', gtopic]); if (accepted) c.publish(base + 'p2', 'on', { retain: true }); else join(); };
+    c.on('connect', setup); setup();
+    joinTimer = setInterval(() => {
+      if (accepted || me !== 2) { clearInterval(joinTimer); return; }
+      if (tries >= 4) { clearInterval(joinTimer); failToMenu('That group does not answer. Maybe it was closed. Try another one.'); return; }
+      join();
+    }, 3000);
+    c.on('message', (topic, buf) => {
+      const txt = buf.toString();
+      if (topic === base + 'ctl') {
+        let m; try { m = JSON.parse(txt); } catch (e) { return; }
+        if (m.cid !== myId) return;
+        if (m.type === 'accept' && !accepted) { accepted = true; clearInterval(joinTimer); c.publish(base + 'p2', 'on', { retain: true }); check(); }
+        else if (m.type === 'busy') { clearInterval(joinTimer); failToMenu('That group is already full. Pick another one.'); }
+      } else if (topic === gtopic) {
+        if (!txt) { hostOn = false; net.partner = 'wait'; linkDown(); if (accepted) $('lobbyStatus').textContent = 'The group closed. Waiting for Team 1 to come back...'; }
+        else { hostOn = true; check(); }
+      } else if (topic === base + 'd1') { try { handleData(JSON.parse(txt)); } catch (e) {} }
+    });
+  } catch (e) { net.server = 'fail'; failToMenu('Cannot reach the game server. Is the internet on? A school network can block it.'); }
+}
+
+// ---- the link between the two players
+function linkUp() {
+  if (!conn || conn.open) return;
+  conn.open = true; net.partner = 'ok';
+  $('lobbyStatus').innerHTML = '<span class="ok">Linked!</span> Fill in your team name.';
+  $('nameCard').style.display = 'block'; $('players').style.display = 'flex';
+  setLink('ok');
+  if (names[me]) conn.send({ team: me, name: names[me] });
+  if (scores[me] !== null) conn.send({ team: me, score: scores[me] });
+  if (safeDone[me]) conn.send({ safeDone: me });
+  if (window.onNetOpen) onNetOpen(conn);
+}
+function linkDown() {
+  if (!conn || !conn.open) return;
+  conn.open = false;
+  if (me) { $('lobbyStatus').textContent = `Lost the link with Team ${other}. Linking again...`; setLink('wait'); }
+}
+function handleData(d) {
+  if (d.name !== undefined) { names[d.team] = d.name; if (conn && conn.open) setLink('ok'); }
+  if (d.score !== undefined) scores[d.team] = d.score;
+  if (d.safeDone) partnerSolved(d.safeDone);
+  if (window.onNet) onNet(d);
+  render();
+}
+
+function closeGame(graceful) {
+  const c = gameClient; gameClient = null;
+  if (!c) return;
+  try {
+    if (graceful && roomCode) {
+      if (isHost) c.publish(PFX + 'groups/' + roomCode, '', { retain: true });
+      else c.publish(PFX + 'g/' + roomCode + '/p2', 'off', { retain: true });
+      c.end();
+    } else c.end(true);            // not graceful: the server fires the "last will" that removes the group
+  } catch (e) {}
+}
+window.addEventListener('beforeunload', () => closeGame(false));
+
 function leave() {
-  me = other = null;                       // so nothing tries to reconnect
-  dropPeer();
-  if (conn) { try { conn.close(); } catch (e) {} }
-  conn = null; roomCode = '';
+  closeGame(true);
+  me = other = null; conn = null; roomCode = ''; groupName = ''; isHost = false; partnerCid = null; partnerOn = false;
   names[1] = names[2] = ''; scores[1] = scores[2] = null;
   $('startQuiz').style.display = 'none'; $('lobbyHub').style.display = 'none';
   money = 0; bestQuiz = 0; quizDone = false; $('money').textContent = 0; resetProgress();
   $('nameInput').value = '';
   $('nameCard').style.display = 'none'; $('players').style.display = 'none';
-  $('roomCard').style.display = 'none'; $('joinCard').style.display = 'none';
-  setLink(null);
-  render();
+  setLink(null); render();
   $('menuStatus').textContent = '';
-  $('pick1').disabled = $('pick2').disabled = false;
-  show('menu');
+  show('menu'); listStart();
 }
 $('leave').onclick = leave;
-
-// ---- Team 1: make the room and wait
-function openHost() {
-  dropPeer();
-  const p = peer = new Peer(roomId(roomCode), { config: ICE });
-  net.broker = 'wait'; net.room = 'wait'; net.ice = ''; net.since = Date.now();
-  p.on('error', err => {
-    if (p._ignore) return;
-    if (err.type === 'unavailable-id') { roomCode = makeCode(); retry = setTimeout(openHost, 200); }   // code taken: pick another
-    else { net.broker = 'fail'; $('menuStatus').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(openHost, 2500); }
-  });
-  p.on('open', () => {
-    net.broker = 'ok'; net.since = Date.now();
-    show('lobby');
-    $('joinCard').style.display = 'none';
-    if (!(conn && conn.open)) {
-      $('roomCard').style.display = 'block'; $('roomCode').textContent = roomCode;
-      $('lobbyStatus').textContent = 'Waiting for Team 2 to join...';
-      setLink('wait');
-    }
-  });
-  p.on('connection', c => { net.room = 'ok'; watchIce(c); setupConn(c); });
-  p.on('disconnected', () => { if (!p._ignore) try { p.reconnect(); } catch (e) {} });
-  p.on('close', () => { if (!p._ignore && me === 1) retry = setTimeout(openHost, 1500); });
-}
-
-// ---- Team 2: join with the code
-function joinRoom(code) {
-  code = (code || '').toUpperCase().replace(/[^A-Z]/g, '');
-  if (code.length !== 4) { $('joinMsg').textContent = 'The code has 4 letters.'; return; }
-  roomCode = code; joinTries = 0;
-  dropPeer();
-  $('joinMsg').textContent = 'Connecting...';
-  setLink('wait');
-  const p = peer = new Peer(undefined, { config: ICE });
-  net.broker = 'wait'; net.room = 'wait'; net.ice = ''; net.since = Date.now();
-  p.on('error', err => {
-    if (p._ignore) return;
-    if (err.type === 'peer-unavailable') {
-      net.room = 'fail'; clearTimeout(retry); retry = setTimeout(tryConnect, 2000);
-      joinTries++;
-      if (joinTries >= 1 && !(conn && conn.open)) $('joinMsg').textContent = `Cannot find room ${roomCode} yet. Check the code, or wait until Team 1 has pressed their button.`;
-    } else { net.broker = 'fail'; $('joinMsg').textContent = 'Connection problem (' + err.type + '). Trying again...'; retry = setTimeout(() => joinRoom(roomCode), 3000); }
-  });
-  p.on('open', () => { net.broker = 'ok'; tryConnect(); });
-  p.on('disconnected', () => { if (!p._ignore) try { p.reconnect(); } catch (e) {} });
-  p.on('close', () => { if (!p._ignore && me === 2 && roomCode) retry = setTimeout(() => joinRoom(roomCode), 1500); });
-}
-let pendingConn = null;
-function tryConnect() {
-  if (!peer || (conn && conn.open)) return;
-  if (pendingConn && !pendingConn.open) { try { pendingConn.close(); } catch (e) {} }   // drop the half-open try before a new one
-  const c = pendingConn = peer.connect(roomId(roomCode), { reliable: true });
-  net.ice = '';
-  setupConn(c); watchIce(c);
-  clearTimeout(retry); retry = setTimeout(tryConnect, 9000);
-}
-$('joinBtn').onclick = () => joinRoom($('joinInput').value);
-$('joinInput').addEventListener('input', e => {
-  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-  if (e.target.value.length === 4) joinRoom(e.target.value);       // join as soon as the 4th letter is typed
-});
-$('copyLink').onclick = async () => {
-  const link = `${location.origin}${location.pathname}?room=${roomCode}`;
-  try { await navigator.clipboard.writeText(link); $('copyMsg').textContent = 'Link copied! Send it to Team 2.'; }
-  catch (e) { $('copyMsg').textContent = link; }
-};
-
-// ---- the link between the two players
-function setupConn(c) {
-  if (conn && conn.open) { c.close(); return; }
-  c.on('open', () => {
-    if (conn && conn.open && conn !== c) { c.close(); return; }
-    conn = c; clearTimeout(retry); net.ice = 'connected'; net.broker = 'ok'; net.room = 'ok';
-    $('roomCard').style.display = 'none'; $('joinCard').style.display = 'none';
-    $('lobbyStatus').innerHTML = '<span class="ok">Linked!</span> Fill in your team name.';
-    $('nameCard').style.display = 'block';
-    $('players').style.display = 'flex';
-    setLink('ok');
-    if (names[me]) c.send({ team: me, name: names[me] });
-    if (scores[me] !== null) c.send({ team: me, score: scores[me] });
-    if (safeDone[me]) c.send({ safeDone: me });
-    if (window.onNetOpen) onNetOpen(c);
-  });
-  c.on('data', d => {
-    if (d.name !== undefined) { names[d.team] = d.name; if (conn && conn.open) setLink('ok'); }
-    if (d.score !== undefined) scores[d.team] = d.score;
-    if (d.safeDone) partnerSolved(d.safeDone);
-    if (window.onNet) onNet(d);
-    render();
-  });
-  c.on('close', () => {
-    if (conn !== c) return;
-    conn = null;
-    if (!me) return;
-    $('lobbyStatus').textContent = `Lost the link with Team ${other}. Linking again...`;
-    setLink('wait');
-    if (me === 2) tryConnect();           // Team 2 keeps trying until Team 1 is back
-  });
-}
 
 $('saveName').onclick = () => {
   const name = $('nameInput').value.trim();
@@ -848,32 +859,36 @@ function toHub(msg) {
   $('money').textContent = money;
   $('hubMsg').textContent = msg || '';
   $('testSwitch').style.display = testMode ? 'inline-block' : 'none';
-  $('testMoney').style.display = testMode ? 'inline-block' : 'none';
-  $('testSwitch').textContent = `Switch to Team ${me === 1 ? 2 : 1}`;
-  $('hubLobby').textContent = testMode ? 'Exit test mode' : 'Back to lobby';
+  $('testMoney').style.display = testMode && !soloMode ? 'inline-block' : 'none';
+  $('testSwitch').textContent = soloMode ? `Switch to the questions of Team ${me === 1 ? 2 : 1}` : `Switch to Team ${me === 1 ? 2 : 1}`;
+  $('hubLobby').textContent = testMode ? (soloMode ? 'Back to the main screen' : 'Exit test mode') : 'Back to lobby';
   show('hub');
 }
 $('lobbyHub').onclick = () => toHub();
 $('hubLobby').onclick = () => testMode ? exitTest() : show('lobby');
 
 // ---- Test mode: play alone, no connection ----
-let testMode = false;
-$('testBtn').onclick = () => {
-  testMode = true; me = 1; other = 2; resetProgress();
+let testMode = false, soloMode = false;
+const modeLabel = () => soloMode ? 'Solo mode' : 'Test mode';
+function startAlone(solo) {
+  listStop();
+  testMode = true; soloMode = solo; me = 1; other = 2; resetProgress();
   money = 0; bestQuiz = 0; quizDone = true; scores[1] = scores[2] = null;
-  toHub('Test mode: you play alone, no second player needed.');
-};
+  toHub(solo ? 'Solo mode: you play alone and do the tasks of both teams.' : 'Test mode: you play alone, no second player needed.');
+}
+$('testBtn').onclick = () => startAlone(false);
+$('soloBtn').onclick = () => startAlone(true);
 $('testMoney').onclick = () => { setMoney(money + 100); $('hubMsg').textContent = 'Test mode: you gave yourself 100 coins.'; };
 $('testSwitch').onclick = () => {
   me = me === 1 ? 2 : 1; other = me === 1 ? 2 : 1;
   bestQuiz = 0;
-  toHub(`Now testing as Team ${me}.`);
+  toHub(`Now playing the questions of Team ${me}.`);
 };
 function exitTest() {
-  testMode = false; me = other = null; resetProgress();
+  testMode = false; soloMode = false; me = other = null; resetProgress();
   money = 0; bestQuiz = 0; quizDone = false; scores[1] = scores[2] = null;
   $('menuStatus').textContent = '';
-  show('menu');
+  show('menu'); listStart();
 }
 $('safeBack').onclick = () => toHub();
 
@@ -902,7 +917,7 @@ function enterSafe() {
   show('safe');
   const mine = side => testMode || me === side;
   $('safeHelp').textContent = testMode
-    ? 'Test mode: you can open both safes. Solve both to open the cabinet.'
+    ? modeLabel() + ': you can open both safes. Solve both to open the cabinet.'
     : `You are Team ${me}: open the ${me === 1 ? 'LEFT' : 'RIGHT'} safe. Your partner opens the other one. When both are solved, the cabinet opens.`;
   [[1, 'safeL', 'safeLs'], [2, 'safeR', 'safeRs']].forEach(([t, id, st]) => {
     const btn = $(id);
@@ -1134,7 +1149,7 @@ $('useKey').onclick = () => {
 };
 
 </script>
-<script src="config.js?v=2"></script>
-<script src="world.js?v=20261111a"></script>
+<script src="config.js?v=3"></script>
+<script src="world.js?v=20261111b"></script>
 </body>
 </html>

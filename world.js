@@ -525,7 +525,7 @@ function overlay(html) { const o = $('boatOverlay'); if (!html) { o.style.displa
 
 function enterBoat() {
   show('boat');
-  $('boatRole').innerHTML = testMode ? 'Test mode: you steer with <b>&larr; &rarr;</b> AND answer the questions below.'
+  $('boatRole').innerHTML = testMode ? modeLabel() + ': you steer with <b>&larr; &rarr;</b> AND answer the questions below.'
     : (me === 1 ? 'You are the <b>STEERER</b>: use <b>&larr; &rarr;</b> to avoid the rocks. Your partner keeps the boat moving!'
                 : 'You are the <b>HELPER</b>: answer the questions fast to keep the boat moving. Your partner steers!');
   $('steerPad').style.display = isSteerer() ? 'flex' : 'none';
@@ -669,7 +669,7 @@ function openNotes() {
 }
 function renderNotes() {
   $('codeMsg').textContent = ''; $('noteMsg').textContent = '';
-  $('notesHelp').textContent = testMode ? 'Test mode: you can solve all the notes.' : `You are Team ${me}: solve the notes with your colour. Your partner solves the others. Turn them ALL over: Team 1 then reads the code, and Team 2 types it to open the door!`;
+  $('notesHelp').textContent = testMode ? modeLabel() + ': you can solve all the notes.' : `You are Team ${me}: solve the notes with your colour. Your partner solves the others. Turn them ALL over: Team 1 then reads the code, and Team 2 types it to open the door!`;
   const grid = $('noteGrid'); grid.innerHTML = '';
   NOTES.forEach((n, i) => {
     const d = document.createElement('div');
@@ -729,7 +729,7 @@ function startLastLevel(fromPartner) {
 function renderCodeBar(el) { el.innerHTML = CFG.clockDigits.map((d, i) => `<span class="${clockDone[i] ? 'got' : ''}">${clockDone[i] ? d : '?'}</span>`).join(''); }
 function renderClockRoom() {
   renderCodeBar($('codeBar'));
-  $('clockHelp').textContent = testMode ? 'Test mode: you can do all the clocks.' : `You are Team ${me}: do the clocks with your colour (2 each). Your partner does the other two.`;
+  $('clockHelp').textContent = testMode ? modeLabel() + ': you can do all the clocks.' : `You are Team ${me}: do the clocks with your colour (2 each). Your partner does the other two.`;
   const box = $('clockTasks'); box.innerHTML = '';
   CLOCK_OWNER.forEach((team, i) => {
     const mine = testMode || team === me, b = document.createElement('button');
@@ -807,7 +807,7 @@ function showFinalLock() {
   sign = ''; document.querySelectorAll('#signs button').forEach(b => b.classList.remove('sel'));
   slotInputs.forEach(i => { i.value = ''; });
   const h = $('finalHint');
-  if (testMode) { h.style.display = 'block'; h.textContent = `Test hint: ${clockCode()} ${SIGN_CHAR[CFG.finalSign]} ${CFG.secretCode} = ${calc(Number(clockCode()), Number(CFG.secretCode), CFG.finalSign)}` + (CFG.testCode ? `   (test code: ${CFG.testCode})` : ''); }
+  if (testMode && !soloMode) { h.style.display = 'block'; h.textContent = `Test hint: ${clockCode()} ${SIGN_CHAR[CFG.finalSign]} ${CFG.secretCode} = ${calc(Number(clockCode()), Number(CFG.secretCode), CFG.finalSign)}` + (CFG.testCode ? `   (test code: ${CFG.testCode})` : ''); }
   else h.style.display = 'none';
 }
 const calc = (a, b, s) => s === '-' ? a - b : s === 'x' ? a * b : a + b;
@@ -891,7 +891,7 @@ window.onNetOpen = c => {
 
 // ---------------------------------------------------------------- test mode: skip to the next level
 window.skipLevel = function () {
-  if (!testMode) return;
+  if (!testMode || soloMode) return;
   const act = document.querySelector('.screen.active').id;
   if (['hub', 'safe', 'cross', 'wsearch'].includes(act)) {            // level 1: the safes
     safeUnlocked = true; safeDone[1] = safeDone[2] = true; enterSafe(); return;
@@ -911,7 +911,7 @@ window.skipLevel = function () {
 $('skipLevel').onclick = () => window.skipLevel();
 setInterval(() => {
   const act = document.querySelector('.screen.active');
-  $('skipLevel').style.display = testMode && act && ['hub', 'safe', 'cross', 'wsearch', 'keyScene', 'doorScene', 'outside', 'boat', 'notes', 'clockroom', 'finalLock'].includes(act.id) ? 'block' : 'none';
+  $('skipLevel').style.display = testMode && !soloMode && act && ['hub', 'safe', 'cross', 'wsearch', 'keyScene', 'doorScene', 'outside', 'boat', 'notes', 'clockroom', 'finalLock'].includes(act.id) ? 'block' : 'none';
 }, 300);
 
 window.resetWorld = function () {
